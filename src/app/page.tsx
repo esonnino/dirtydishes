@@ -43,22 +43,37 @@ interface EditorProps {
   className?: string;
 }
 
-// Add these new functions before the RichTextEditor component
+// Add these interfaces before the RichTextEditor component
+interface FormatChange {
+  type: 'summary' | 'toc' | 'content';
+  description: string;
+  before: string;
+  after: string;
+}
+
+interface ProcessedContent {
+  summary: string;
+  tableOfContents: string;
+  content: string;
+  changes: FormatChange[];
+}
+
 const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProps) => {
   const [isToolbarVisible, setIsToolbarVisible] = useState(false);
   const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
   const [showFormatSuggestion, setShowFormatSuggestion] = useState(false);
   const [currentStep, setCurrentStep] = useState<FormattingStep>('analyzing');
+  const [showHighlights, setShowHighlights] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const [editorContent, setEditorContent] = useState(value);
   const [selectedText, setSelectedText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processedContent, setProcessedContent] = useState<{
-    summary: string;
-    tableOfContents: string;
-    content: string;
-  } | null>(null);
+  const [processedContent, setProcessedContent] = useState<ProcessedContent | null>(null);
+  const [isFormatComplete, setIsFormatComplete] = useState(false);
+  const [showChanges, setShowChanges] = useState(false);
+  const [originalContent, setOriginalContent] = useState(value);
+  const mainContentRootRef = useRef<ReturnType<typeof createRoot> | null>(null);
 
   // Initialize editor content
   useEffect(() => {
@@ -237,12 +252,229 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
     }
   };
 
-  // Add the format handler
+  // Add helper function to check if a line has meaningful content changes
+  const hasLineChanged = (newLine: string, originalContent: string) => {
+    // Remove HTML tags and markdown formatting for comparison
+    const cleanNewLine = newLine
+      .replace(/<[^>]*>/g, '')
+      .replace(/^#+\s/, '') // Remove heading markers
+      .replace(/\*\*/g, '') // Remove bold markers
+      .replace(/\*/g, '') // Remove italic markers
+      .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Replace links with just their text
+      .replace(/^[-*]\s/, '') // Remove list markers
+      .trim();
+
+    const cleanOriginalContent = originalContent
+      .replace(/<[^>]*>/g, '')
+      .replace(/^#+\s/, '')
+      .replace(/\*\*/g, '')
+      .replace(/\*/g, '')
+      .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+      .replace(/^[-*]\s/, '')
+      .trim();
+    
+    // Split original content into lines for comparison
+    const originalLines = cleanOriginalContent.split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    // Check if the cleaned new line exists in any form in the original content
+    return !originalLines.some(line => {
+      const similarity = calculateSimilarity(line, cleanNewLine);
+      return similarity > 0.8; // Consider lines with 80% or more similarity as unchanged
+    });
+  };
+
+  // Helper function to calculate text similarity (0 to 1)
+  const calculateSimilarity = (str1: string, str2: string) => {
+    if (str1 === str2) return 1;
+    if (!str1 || !str2) return 0;
+    
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+    
+    // Early return for very different lengths
+    if (longer.length === 0) return 1.0;
+    if ((longer.length - shorter.length) / longer.length > 0.3) return 0;
+
+    const costs = [];
+    for (let i = 0; i <= shorter.length; i++) {
+      let lastValue = i;
+      for (let j = 0; j <= longer.length; j++) {
+        if (i === 0) {
+          costs[j] = j;
+        } else {
+          if (j > 0) {
+            let newValue = costs[j - 1];
+            if (shorter[i - 1] !== longer[j - 1]) {
+              newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+            }
+            costs[j - 1] = lastValue;
+            lastValue = newValue;
+          }
+        }
+      }
+      if (i > 0) costs[longer.length] = lastValue;
+    }
+    return (longer.length - costs[longer.length]) / longer.length;
+  };
+
+  // Add function to handle changes panel toggle
+  const handleChangesClick = async () => {
+    const newShowChanges = !showChanges;
+    setShowChanges(newShowChanges);
+    setShowHighlights(newShowChanges); // Show highlights when panel is open
+
+    // Re-render content with updated highlights
+    if (editorRef.current && processedContent) {
+      const contentWrapper = editorRef.current.querySelector('div');
+      if (!contentWrapper) return;
+
+      // Find the main content section (the last section)
+      const mainSection = contentWrapper.querySelector('section:last-child');
+      if (!mainSection) return;
+
+      // Clean up any existing root
+      if (mainContentRootRef.current) {
+        try {
+          mainContentRootRef.current.unmount();
+        } catch (e) {
+          console.error('Error unmounting root:', e);
+        }
+        mainContentRootRef.current = null;
+      }
+
+      // Remove any existing content and React root
+      while (mainSection.firstChild) {
+        mainSection.removeChild(mainSection.firstChild);
+      }
+
+      // Create a new container for React content
+      const container = document.createElement('div');
+      mainSection.appendChild(container);
+
+      // Create new root on the fresh container
+      mainContentRootRef.current = createRoot(container);
+
+      // Use the root to render
+      mainContentRootRef.current.render(
+        <div className="prose prose-slate max-w-none">
+          <div dangerouslySetInnerHTML={{ 
+            __html: processedContent.content
+              .split('\n')
+              .map(line => {
+                const isChanged = hasLineChanged(line, originalContent);
+                const highlightClass = isChanged && newShowChanges ? 'bg-blue-50 border-b border-dotted border-blue-500' : '';
+
+                if (line.startsWith('# ')) {
+                  const title = line.replace('# ', '');
+                  return `<div class="text-[24px] font-semibold text-[#172B4D] mb-6 mt-8 ${highlightClass}">${title}</div>`;
+                }
+                if (line.startsWith('## ')) {
+                  const title = line.replace('## ', '');
+                  return `<div class="text-[20px] font-medium text-[#172B4D] mb-4 mt-6 ${highlightClass}">${title}</div>`;
+                }
+                if (line.startsWith('---')) {
+                  return '<hr class="my-8 border-t border-[#DFE1E6]" />';
+                }
+                if (line.trim() && !line.startsWith('#') && !line.startsWith('---')) {
+                  return `<p class="text-[15px] leading-[1.6] text-[#42526E] mb-4 ${highlightClass}">${line}</p>`;
+                }
+                return line;
+              })
+              .join('\n')
+          }} />
+        </div>
+      );
+    }
+  };
+
+  // Update handleUndoAll to clean up the root
+  const handleUndoAll = () => {
+    if (editorRef.current && originalContent) {
+      // Clean up the React root
+      if (mainContentRootRef.current) {
+        mainContentRootRef.current.unmount();
+        mainContentRootRef.current = null;
+      }
+      
+      editorRef.current.innerHTML = originalContent;
+      setEditorContent(originalContent);
+      setShowFormatSuggestion(false);
+      setIsFormatComplete(false);
+      setShowChanges(false);
+      setShowHighlights(false);
+    }
+  };
+
+  // Update handleAcceptChanges to clean up the root
+  const handleAcceptChanges = () => {
+    // Clean up the React root
+    if (mainContentRootRef.current) {
+      mainContentRootRef.current.unmount();
+      mainContentRootRef.current = null;
+    }
+    
+    setShowFormatSuggestion(false);
+    setIsFormatComplete(false);
+    setShowChanges(false);
+    setShowHighlights(false);
+    setOriginalContent(editorContent);
+  };
+
+  // Add function to handle undoing individual changes
+  const handleUndoChange = (changeType: FormatChange['type']) => {
+    if (!processedContent || !editorRef.current) return;
+
+    // Find the specific change
+    const change = processedContent.changes.find(c => c.type === changeType);
+    if (!change) return;
+
+    // Clean up the React root before updating content
+    if (mainContentRootRef.current) {
+      mainContentRootRef.current.unmount();
+      mainContentRootRef.current = null;
+    }
+
+    // Update the content based on the change type
+    let newContent = editorContent;
+    switch (changeType) {
+      case 'summary':
+        // Remove summary section using a more compatible regex
+        newContent = newContent.replace(/<section class="summary[\s\S]*?<\/section>/, '');
+        break;
+      case 'toc':
+        // Remove TOC section using a more compatible regex
+        newContent = newContent.replace(/<section class="toc[\s\S]*?<\/section>/, '');
+        break;
+      case 'content':
+        // Revert main content
+        newContent = change.before;
+        break;
+    }
+
+    editorRef.current.innerHTML = newContent;
+    setEditorContent(newContent);
+    setShowHighlights(false);
+  };
+
+  // Clean up the root when component unmounts
+  useEffect(() => {
+    return () => {
+      if (mainContentRootRef.current) {
+        mainContentRootRef.current.unmount();
+        mainContentRootRef.current = null;
+      }
+    };
+  }, []);
+
+  // Modify the handleFormat function
   const handleFormat = useCallback(async () => {
     try {
       setIsProcessing(true);
+      setOriginalContent(editorContent); // Store original content
       const contentWrapper = document.createElement('div');
-      contentWrapper.className = 'max-w-[900px] mx-auto py-8';
+      contentWrapper.className = 'py-8'; // Remove mx-auto and max-w classes
       
       // Step 1: Show analyzing state and make the OpenAI request
       setCurrentStep('analyzing');
@@ -284,7 +516,31 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
         await new Promise(resolve => setTimeout(resolve, 1500)); // Increased delay after summary
 
         // Store the formatted content for later use
-        setProcessedContent(formattedContent);
+        setProcessedContent({
+          summary: formattedContent.summary,
+          tableOfContents: formattedContent.tableOfContents,
+          content: formattedContent.content,
+          changes: [
+            {
+              type: 'summary',
+              description: 'Added document summary',
+              before: '',
+              after: formattedContent.summary
+            },
+            {
+              type: 'toc',
+              description: 'Generated table of contents',
+              before: '',
+              after: formattedContent.tableOfContents
+            },
+            {
+              type: 'content',
+              description: 'Formatted main content',
+              before: editorContent,
+              after: formattedContent.content
+            }
+          ]
+        });
 
         // Start Table of Contents step with delay
         setCurrentStep('toc');
@@ -300,12 +556,13 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
         // Wait for final animations
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
+
+      // After all formatting is complete
+      setIsFormatComplete(true);
     } catch (error) {
       console.error('Error formatting text:', error);
     } finally {
-      // Only hide format suggestion after everything is complete
       setIsProcessing(false);
-      setShowFormatSuggestion(false);
     }
   }, [editorContent, editorRef]);
 
@@ -353,7 +610,7 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
     tocSection.style.opacity = '1';
   };
 
-  // Add function to handle main content rendering
+  // Modify the renderMainContent function to include highlights
   const renderMainContent = async (contentWrapper: HTMLDivElement, content: string) => {
     const mainSection = document.createElement('section');
     mainSection.className = 'opacity-0 transition-opacity duration-300';
@@ -362,15 +619,18 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
     const formattedContent = content
       .split('\n')
       .map(line => {
+        const isChanged = hasLineChanged(line, originalContent);
+        const highlightClass = isChanged && showHighlights ? 'bg-blue-50 border-b border-dotted border-blue-500' : '';
+
         // Handle main headings (H1)
         if (line.startsWith('# ')) {
           const title = line.replace('# ', '');
-          return `<div class="text-[24px] font-semibold text-[#172B4D] mb-6 mt-8">${title}</div>`;
+          return `<div class="text-[24px] font-semibold text-[#172B4D] mb-6 mt-8 ${highlightClass}">${title}</div>`;
         }
         // Handle subheadings (H2)
         if (line.startsWith('## ')) {
           const title = line.replace('## ', '');
-          return `<div class="text-[20px] font-medium text-[#172B4D] mb-4 mt-6">${title}</div>`;
+          return `<div class="text-[20px] font-medium text-[#172B4D] mb-4 mt-6 ${highlightClass}">${title}</div>`;
         }
         // Handle horizontal rules
         if (line.startsWith('---')) {
@@ -378,7 +638,7 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
         }
         // Handle paragraphs (non-empty lines that don't start with # or ---)
         if (line.trim() && !line.startsWith('#') && !line.startsWith('---')) {
-          return `<p class="text-[15px] leading-[1.6] text-[#42526E] mb-4">${line}</p>`;
+          return `<p class="text-[15px] leading-[1.6] text-[#42526E] mb-4 ${highlightClass}">${line}</p>`;
         }
         // Handle empty lines
         return line;
@@ -399,43 +659,160 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
     mainSection.style.opacity = '1';
   };
 
+  const handleDismiss = () => {
+    // If we're in the middle of processing, clean up and revert
+    if (isProcessing) {
+      // Clean up any React roots that might have been created
+      if (mainContentRootRef.current) {
+        mainContentRootRef.current.unmount();
+        mainContentRootRef.current = null;
+      }
+      
+      // Restore original content if editor was modified
+      if (editorRef.current && originalContent) {
+        editorRef.current.innerHTML = originalContent;
+        setEditorContent(originalContent);
+      }
+      
+      // Reset all states
+      setIsProcessing(false);
+      setCurrentStep('analyzing');
+      setProcessedContent(null);
+      setIsFormatComplete(false);
+      setShowHighlights(false);
+      setShowChanges(false);
+    }
+    
+    // Close the format suggestion
+    setShowFormatSuggestion(false);
+  };
+
   return (
     <div className="relative">
       {/* Format suggestion button */}
       {showFormatSuggestion && (
         <div 
-          className="fixed bottom-6 right-[72px] flex items-center gap-2"
+          className="fixed bottom-6 right-[72px] flex flex-col items-end gap-2"
           style={{
             animation: 'slideIn 0.3s ease-out'
           }}
         >
-          <button 
-            className={`flex items-center gap-2 px-4 h-10 bg-white rounded-[8pt] shadow-lg border border-[#DFE1E6] hover:bg-[#F4F5F7] transition-all duration-300 ${isProcessing ? 'min-w-[280px]' : ''}`}
-            onClick={handleFormat}
-            disabled={isProcessing}
-          >
-            {isProcessing ? (
-              <div className="flex items-center gap-2 w-full">
-                <FormattingProgress currentStep={currentStep} />
+          {isFormatComplete ? (
+            <>
+              <div className="flex items-center gap-2">
+                <button 
+                  className={`flex items-center gap-2 px-4 h-10 bg-white rounded-l-[8pt] shadow-lg border border-[#DFE1E6] hover:bg-[#F4F5F7] transition-all duration-300`}
+                  onClick={handleChangesClick}
+                >
+                  <svg className="w-4 h-4 text-[#36B37E]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span className="text-[14px] font-medium text-[#505258] font-['Inter var']">
+                    {processedContent?.changes.length || 0} changes made
+                  </span>
+                  <svg className={`w-4 h-4 text-[#505258] transition-transform duration-200 ${showChanges ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+                <button
+                  onClick={handleDismiss}
+                  className="flex items-center justify-center w-10 h-10 bg-white rounded-r-[8pt] shadow-lg border border-l-0 border-[#DFE1E6] hover:bg-[#F4F5F7] transition-colors shrink-0"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M13 1L1 13M1 1L13 13" stroke="#505258" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+                {!showChanges && (
+                  <>
+                    <button
+                      onClick={handleAcceptChanges}
+                      className="flex items-center gap-2 px-4 h-10 bg-[#0052CC] text-white rounded-[8pt] shadow-lg hover:bg-[#0065FF] transition-colors"
+                    >
+                      <span className="text-[14px] font-medium font-['Inter var']">Accept all</span>
+                    </button>
+                    <button
+                      onClick={handleUndoAll}
+                      className="flex items-center gap-2 px-4 h-10 bg-white rounded-[8pt] shadow-lg border border-[#DFE1E6] hover:bg-[#F4F5F7] transition-colors"
+                    >
+                      <span className="text-[14px] font-medium text-[#505258] font-['Inter var']">Undo all</span>
+                    </button>
+                  </>
+                )}
               </div>
-            ) : (
-              <>
-                <svg className="w-4 h-4 text-[#357DE8] shrink-0" width="17" height="16" viewBox="0 0 17 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path fillRule="evenodd" clipRule="evenodd" d="M10.623 2V0H12.123V2H10.623ZM8.54456 3.48223L7.13034 2.06802L8.191 1.00736L9.60522 2.42157L8.54456 3.48223ZM15.6156 2.06802L14.2014 3.48223L13.1407 2.42157L14.555 1.00736L15.6156 2.06802ZM9.40068 4.16161C9.93765 3.62464 10.8083 3.62464 11.3452 4.16161L12.4613 5.27773C12.9983 5.8147 12.9983 6.6853 12.4613 7.22227L4.34522 15.3384C3.80825 15.8754 2.93765 15.8754 2.40068 15.3384L1.28456 14.2223C0.747593 13.6853 0.747594 12.8147 1.28456 12.2777L9.40068 4.16161ZM10.373 5.31066L8.93361 6.75L9.87295 7.68934L11.3123 6.25L10.373 5.31066ZM8.81229 8.75L7.87295 7.81066L2.43361 13.25L3.37295 14.1893L8.81229 8.75ZM16.623 6H14.623V4.5H16.623V6ZM14.555 9.49264L13.1407 8.07843L14.2014 7.01777L15.6156 8.43198L14.555 9.49264Z" fill="currentColor"/>
+
+              {/* Changes panel */}
+              {showChanges && processedContent && (
+                <div className="w-[400px] bg-white rounded-lg shadow-xl border border-[#DFE1E6] p-4 mt-2">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-[14px] font-medium text-[#172B4D]">Changes made</div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleAcceptChanges}
+                        className="text-[13px] text-[#0052CC] font-medium hover:text-[#0065FF] hover:underline"
+                      >
+                        Accept all
+                      </button>
+                      <span className="text-[#DFE1E6]">|</span>
+                      <button
+                        onClick={handleUndoAll}
+                        className="text-[13px] text-[#505258] font-medium hover:text-[#42526E] hover:underline"
+                      >
+                        Undo all
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {processedContent.changes.map((change) => (
+                      <div key={change.type} className="flex items-center justify-between py-2 border-t border-[#DFE1E6] first:border-t-0">
+                        <div className="flex items-center gap-2">
+                          <svg className="w-4 h-4 text-[#36B37E]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                          <span className="text-[13px] text-[#42526E]">{change.description}</span>
+                        </div>
+                        <button
+                          onClick={() => handleUndoChange(change.type)}
+                          className="text-[13px] text-[#505258] hover:text-[#42526E] hover:underline"
+                        >
+                          Undo
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex items-center">
+              <button 
+                className={`flex items-center gap-2 px-4 h-10 bg-white rounded-l-[8pt] shadow-lg border border-[#DFE1E6] hover:bg-[#F4F5F7] transition-all duration-300 ${isProcessing ? 'min-w-[280px]' : ''}`}
+                onClick={handleFormat}
+                disabled={isProcessing}
+              >
+                {isProcessing ? (
+                  <div className="flex items-center gap-2 w-full">
+                    <FormattingProgress currentStep={currentStep} />
+                  </div>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 text-[#357DE8] shrink-0" width="17" height="16" viewBox="0 0 17 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path fillRule="evenodd" clipRule="evenodd" d="M10.623 2V0H12.123V2H10.623ZM8.54456 3.48223L7.13034 2.06802L8.191 1.00736L9.60522 2.42157L8.54456 3.48223ZM15.6156 2.06802L14.2014 3.48223L13.1407 2.42157L14.555 1.00736L15.6156 2.06802ZM9.40068 4.16161C9.93765 3.62464 10.8083 3.62464 11.3452 4.16161L12.4613 5.27773C12.9983 5.8147 12.9983 6.6853 12.4613 7.22227L4.34522 15.3384C3.80825 15.8754 2.93765 15.8754 2.40068 15.3384L1.28456 14.2223C0.747593 13.6853 0.747594 12.8147 1.28456 12.2777L9.40068 4.16161ZM10.373 5.31066L8.93361 6.75L9.87295 7.68934L11.3123 6.25L10.373 5.31066ZM8.81229 8.75L7.87295 7.81066L2.43361 13.25L3.37295 14.1893L8.81229 8.75ZM16.623 6H14.623V4.5H16.623V6ZM14.555 9.49264L13.1407 8.07843L14.2014 7.01777L15.6156 8.43198L14.555 9.49264Z" fill="currentColor"/>
+                    </svg>
+                    <span className="text-[14px] font-medium text-[#505258] font-['Inter var']">Format page</span>
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleDismiss}
+                className="flex items-center justify-center w-10 h-10 bg-white rounded-r-[8pt] shadow-lg border border-l-0 border-[#DFE1E6] hover:bg-[#F4F5F7] transition-colors shrink-0"
+                disabled={false} // Remove disabled state to allow dismissal during processing
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M13 1L1 13M1 1L13 13" stroke="#505258" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                <span className="text-[14px] font-medium text-[#505258] font-['Inter var']">Format page</span>
-              </>
-            )}
-          </button>
-          <button
-            onClick={() => setShowFormatSuggestion(false)}
-            className="flex items-center justify-center w-10 h-10 bg-white rounded-[8pt] shadow-lg border border-[#DFE1E6] hover:bg-[#F4F5F7] transition-colors shrink-0"
-            disabled={isProcessing}
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M13 1L1 13M1 1L13 13" stroke="#505258" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -694,64 +1071,19 @@ const fadeInAnimation = css`
 `;
 
 export default function Home() {
-  const [content, setContent] = useState(`<div class="section">
-  <h2>✨ Mission</h2>
-  <p>Our mission is to reliably deliver critical medical supplies, vaccines, and medications to all people, efficiently and quickly, regardless of location.</p>
-</div>
-
-<div class="section">
-  <h2>🎯 Goals</h2>
-  
-  <div class="objective">
-    <strong>Objective:</strong> Successful Adoption of the Current Web Portal App
-  </div>
-  <ul>
-    <li class="kr"><strong>KR:</strong> <span>Achieve a 30% increase in user sign-ups within the first quarter following the launch.</span></li>
-    <li class="kr"><strong>KR:</strong> <span>Reach a 70% user engagement rate (measured by active sessions per week) within three months.</span></li>
-    <li class="kr"><strong>KR:</strong> <span>Secure a 90% satisfaction rate in customer feedback surveys regarding the portal's usability and functionality.</span></li>
-  </ul>
-
-  <div class="objective">
-    <strong>Objective:</strong> Effective Preparation and Launch of FleetFlow
-  </div>
-  <ul>
-    <li class="kr"><strong>KR:</strong> <span>Develop and execute a comprehensive marketing campaign that generates 50,000 impressions before the FleetFlow launch.</span></li>
-    <li class="kr"><strong>KR:</strong> <span>Engage with at least 20 industry influencers or thought leaders to review or mention FleetFlow in their publications or platforms.</span></li>
-    <li class="kr"><strong>KR:</strong> <span>Organize three successful pre-launch webinars or demos with a total attendance of at least 500 potential customers.</span></li>
-  </ul>
-
-  <div class="objective">
-    <strong>Objective:</strong> Increased Brand Awareness and Market Penetration
-  </div>
-  <ul>
-    <li class="kr"><strong>KR:</strong> <span>Increase VitaFleet's social media following by 25% across all platforms within the next quarter.</span></li>
-    <li class="kr"><strong>KR:</strong> <span>Achieve a 15% increase in website traffic through VitaFleet's improved FleetFlow marketing campaign.</span></li>
-  </ul>
-</div>
-
-<div class="section">
-  <h2>👥 Teams</h2>
-  <ul>
-    <li><strong>Global Marketing:</strong> (a.k.a FleetLeads) - Oversees the global marketing footprint and aligns the various marketing teams across the org.</li>
-    <li>EMEA Marketing</li>
-    <li>Americas Marketing</li>
-    <li>Customer Support and Success Teams</li>
-    <li>Market Research Analysts</li>
-    <li>Event Coordinators</li>
-    <li>Brand Strategy Development</li>
-    <li>Brand Identity Management</li>
-    <li>Content Creation</li>
-  </ul>
-</div>
-
-<div class="section">
-  <h2>📚 Additional Reading</h2>
-  <ul>
-    <li><a href="#">Add net new customers through product + marketing</a></li>
-    <li><a href="#">New signups as we raise awareness</a></li>
-    <li><a href="#">Gross new customers as we supercharge our growth</a></li>
-  </ul>
-</div>`);
+  const [content, setContent] = useState('');
+  const [showFormatSuggestion, setShowFormatSuggestion] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [showChanges, setShowChanges] = useState(false);
+  const [isFormatComplete, setIsFormatComplete] = useState(false);
+  const [processedContent, setProcessedContent] = useState<{
+    changes: Array<{
+      type: string;
+      description: string;
+    }>;
+    content: string;
+  } | null>(null);
 
   const [selectedText, setSelectedText] = useState('');
 
@@ -793,6 +1125,54 @@ export default function Home() {
       presence: 'online' as const,
     },
   ];
+
+  const handleFormat = async () => {
+    setIsProcessing(true);
+    setCurrentStep(0);
+    
+    try {
+      const response = await formatText(content);
+      setProcessedContent({
+        changes: [
+          { type: 'headings', description: 'Fixed heading hierarchy' },
+          { type: 'lists', description: 'Standardized list formatting' },
+          { type: 'whitespace', description: 'Normalized whitespace' },
+          { type: 'links', description: 'Fixed broken links' }
+        ],
+        content: response.content
+      });
+      setIsFormatComplete(true);
+      setContent(response.content);
+    } catch (error) {
+      console.error('Error formatting text:', error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleAcceptChanges = () => {
+    // Changes are already applied, just close the panel
+    setShowChanges(false);
+    setShowFormatSuggestion(false);
+  };
+
+  const handleUndoAll = () => {
+    setContent(content); // Revert to original text
+    setShowChanges(false);
+    setShowFormatSuggestion(false);
+    setIsFormatComplete(false);
+    setProcessedContent(null);
+  };
+
+  const handleUndoChange = (changeType: string) => {
+    // Remove the change from the list
+    if (processedContent) {
+      setProcessedContent({
+        ...processedContent,
+        changes: processedContent.changes.filter(c => c.type !== changeType)
+      });
+    }
+  };
 
   return (
     <MainLayout selectedText={selectedText}>

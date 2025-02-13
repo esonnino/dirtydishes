@@ -23,6 +23,7 @@
     "@atlaskit/page-layout": "^3.12.2",
     "@atlaskit/toggle": "^14.1.2",
     "@atlaskit/tokens": "^3.3.1",
+    "@radix-ui/react-slot": "^1.1.2",
     "@tailwindcss/typography": "^0.5.16",
     "@tiptap/extension-placeholder": "^2.11.5",
     "@tiptap/react": "^2.11.5",

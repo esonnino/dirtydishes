@@ -1,4 +1,5 @@
 import { TextLoop } from '@/components/core/text-loop';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export type FormattingStep = 
   | 'analyzing'
@@ -27,7 +28,17 @@ export function FormattingProgress({ currentStep }: FormattingProgressProps) {
         </svg>
       </div>
       <div className="text-[14px] font-medium font-['Inter var'] flex-1">
-        {steps[currentStep]}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentStep}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            {steps[currentStep]}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );
