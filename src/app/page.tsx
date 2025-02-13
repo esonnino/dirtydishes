@@ -1,7 +1,7 @@
 'use client';
 
 /** @jsxImportSource react */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import { token } from '@atlaskit/tokens';
 import Button from '@atlaskit/button';
@@ -30,6 +30,10 @@ import AddIcon from '@atlaskit/icon/glyph/add';
 import MoreIcon from '@atlaskit/icon/glyph/more';
 import ChevronDownIcon from '@atlaskit/icon/glyph/chevron-down';
 import { css, SerializedStyles } from '@emotion/react';
+import { TextEffect } from '../components/ui/text-effect';
+import { formatText } from '../lib/text-formatting';
+import { FormattingProgress, FormattingStep } from '../components/ui/FormattingProgress';
+import { createRoot } from 'react-dom/client';
 
 // Define interfaces for our editor
 interface EditorProps {
@@ -39,13 +43,22 @@ interface EditorProps {
   className?: string;
 }
 
+// Add these new functions before the RichTextEditor component
 const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProps) => {
-  const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
   const [isToolbarVisible, setIsToolbarVisible] = useState(false);
+  const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
+  const [showFormatSuggestion, setShowFormatSuggestion] = useState(false);
+  const [currentStep, setCurrentStep] = useState<FormattingStep>('analyzing');
   const toolbarRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const [editorContent, setEditorContent] = useState(value);
   const [selectedText, setSelectedText] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processedContent, setProcessedContent] = useState<{
+    summary: string;
+    tableOfContents: string;
+    content: string;
+  } | null>(null);
 
   // Initialize editor content
   useEffect(() => {
@@ -58,6 +71,19 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
     const newContent = e.currentTarget.innerHTML;
     setEditorContent(newContent);
     onChange(newContent);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    
+    // Check if the pasted content is plain text and longer than 100 characters
+    if (text && text.length > 100) {
+      document.execCommand('insertText', false, text);
+      setShowFormatSuggestion(true);
+    } else {
+      document.execCommand('insertText', false, text);
+    }
   };
 
   const updateToolbarPosition = () => {
@@ -211,8 +237,208 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
     }
   };
 
+  // Add the format handler
+  const handleFormat = useCallback(async () => {
+    try {
+      setIsProcessing(true);
+      const contentWrapper = document.createElement('div');
+      contentWrapper.className = 'max-w-[900px] mx-auto py-8';
+      
+      // Step 1: Show analyzing state and make the OpenAI request
+      setCurrentStep('analyzing');
+      const formattedContent = await formatText(editorContent);
+      
+      if (editorRef.current) {
+        // Now that we have the content, switch to summary step
+        setCurrentStep('summary');
+        
+        // Fade out current content
+        editorRef.current.style.opacity = '0';
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Clear and prepare container
+        editorRef.current.innerHTML = '';
+        editorRef.current.appendChild(contentWrapper);
+        
+        // Render Summary
+        const summarySection = document.createElement('section');
+        summarySection.className = 'mb-12 bg-[#F8F9FA] rounded-lg p-6 border border-[#DFE1E6] opacity-0 transition-opacity duration-300';
+        const summaryRoot = createRoot(summarySection);
+        summaryRoot.render(
+          <>
+            <TextEffect per="word" preset="blur" as="h2" className="text-[#172B4D] text-lg font-semibold mb-3">
+              Summary
+            </TextEffect>
+            <TextEffect per="word" preset="blur" className="text-[#42526E] text-base leading-relaxed">
+              {formattedContent.summary}
+            </TextEffect>
+          </>
+        );
+        
+        contentWrapper.appendChild(summarySection);
+        editorRef.current.style.opacity = '1';
+        
+        // Fade in summary
+        await new Promise(resolve => setTimeout(resolve, 100));
+        summarySection.style.opacity = '1';
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Increased delay after summary
+
+        // Store the formatted content for later use
+        setProcessedContent(formattedContent);
+
+        // Start Table of Contents step with delay
+        setCurrentStep('toc');
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Add delay before TOC
+        await renderTableOfContents(contentWrapper, formattedContent.tableOfContents);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Add delay after TOC
+
+        // Start Content step with delay
+        setCurrentStep('content');
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Add delay before content
+        await renderMainContent(contentWrapper, formattedContent.content);
+        
+        // Wait for final animations
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    } catch (error) {
+      console.error('Error formatting text:', error);
+    } finally {
+      // Only hide format suggestion after everything is complete
+      setIsProcessing(false);
+      setShowFormatSuggestion(false);
+    }
+  }, [editorContent, editorRef]);
+
+  // Separate function to handle Table of Contents rendering
+  const renderTableOfContents = async (contentWrapper: HTMLDivElement, tocContent: string) => {
+    // Show "Generating table of contents..." for 3 seconds
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    const tocSection = document.createElement('section');
+    tocSection.className = 'mb-12 opacity-0 transition-opacity duration-300';
+
+    // Convert markdown to HTML with proper styling
+    const formattedTocContent = tocContent.split('\n').map(line => {
+      if (line.startsWith('## ')) {
+        // Main section
+        const content = line.replace('## ', '');
+        return `<div class="text-[#172B4D] font-medium text-[15px] mb-2">${content}</div>`;
+      } else if (line.startsWith('### ')) {
+        // Subsection with indent
+        const content = line.replace('### ', '');
+        return `<div class="text-[#42526E] text-[14px] ml-4 mb-1.5 hover:text-[#0052CC] cursor-pointer">${content}</div>`;
+      }
+      return line;
+    }).join('');
+
+    const tocRoot = createRoot(tocSection);
+    tocRoot.render(
+      <>
+        <TextEffect per="word" preset="blur" as="h2" className="text-[#172B4D] text-xl font-semibold mb-4">
+          Table of Contents
+        </TextEffect>
+        <div className="bg-[#FAFBFC] rounded-lg p-5 border-l-4 border-[#0052CC]">
+          <div 
+            className="space-y-1"
+            dangerouslySetInnerHTML={{ __html: formattedTocContent }}
+          />
+        </div>
+      </>
+    );
+    
+    contentWrapper.appendChild(tocSection);
+    
+    // Fade in TOC
+    await new Promise(resolve => setTimeout(resolve, 100));
+    tocSection.style.opacity = '1';
+  };
+
+  // Add function to handle main content rendering
+  const renderMainContent = async (contentWrapper: HTMLDivElement, content: string) => {
+    const mainSection = document.createElement('section');
+    mainSection.className = 'opacity-0 transition-opacity duration-300';
+
+    // Convert markdown headings to properly styled divs
+    const formattedContent = content
+      .split('\n')
+      .map(line => {
+        // Handle main headings (H1)
+        if (line.startsWith('# ')) {
+          const title = line.replace('# ', '');
+          return `<div class="text-[24px] font-semibold text-[#172B4D] mb-6 mt-8">${title}</div>`;
+        }
+        // Handle subheadings (H2)
+        if (line.startsWith('## ')) {
+          const title = line.replace('## ', '');
+          return `<div class="text-[20px] font-medium text-[#172B4D] mb-4 mt-6">${title}</div>`;
+        }
+        // Handle horizontal rules
+        if (line.startsWith('---')) {
+          return '<hr class="my-8 border-t border-[#DFE1E6]" />';
+        }
+        // Handle paragraphs (non-empty lines that don't start with # or ---)
+        if (line.trim() && !line.startsWith('#') && !line.startsWith('---')) {
+          return `<p class="text-[15px] leading-[1.6] text-[#42526E] mb-4">${line}</p>`;
+        }
+        // Handle empty lines
+        return line;
+      })
+      .join('\n');
+
+    const mainRoot = createRoot(mainSection);
+    mainRoot.render(
+      <div className="prose prose-slate max-w-none">
+        <div dangerouslySetInnerHTML={{ __html: formattedContent }} />
+      </div>
+    );
+    
+    contentWrapper.appendChild(mainSection);
+    
+    // Fade in main content
+    await new Promise(resolve => setTimeout(resolve, 100));
+    mainSection.style.opacity = '1';
+  };
+
   return (
     <div className="relative">
+      {/* Format suggestion button */}
+      {showFormatSuggestion && (
+        <div 
+          className="fixed bottom-6 right-[72px] flex items-center gap-2"
+          style={{
+            animation: 'slideIn 0.3s ease-out'
+          }}
+        >
+          <button 
+            className={`flex items-center gap-2 px-4 h-10 bg-white rounded-[8pt] shadow-lg border border-[#DFE1E6] hover:bg-[#F4F5F7] transition-all duration-300 ${isProcessing ? 'min-w-[280px]' : ''}`}
+            onClick={handleFormat}
+            disabled={isProcessing}
+          >
+            {isProcessing ? (
+              <div className="flex items-center gap-2 w-full">
+                <FormattingProgress currentStep={currentStep} />
+              </div>
+            ) : (
+              <>
+                <svg className="w-4 h-4 text-[#357DE8] shrink-0" width="17" height="16" viewBox="0 0 17 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path fillRule="evenodd" clipRule="evenodd" d="M10.623 2V0H12.123V2H10.623ZM8.54456 3.48223L7.13034 2.06802L8.191 1.00736L9.60522 2.42157L8.54456 3.48223ZM15.6156 2.06802L14.2014 3.48223L13.1407 2.42157L14.555 1.00736L15.6156 2.06802ZM9.40068 4.16161C9.93765 3.62464 10.8083 3.62464 11.3452 4.16161L12.4613 5.27773C12.9983 5.8147 12.9983 6.6853 12.4613 7.22227L4.34522 15.3384C3.80825 15.8754 2.93765 15.8754 2.40068 15.3384L1.28456 14.2223C0.747593 13.6853 0.747594 12.8147 1.28456 12.2777L9.40068 4.16161ZM10.373 5.31066L8.93361 6.75L9.87295 7.68934L11.3123 6.25L10.373 5.31066ZM8.81229 8.75L7.87295 7.81066L2.43361 13.25L3.37295 14.1893L8.81229 8.75ZM16.623 6H14.623V4.5H16.623V6ZM14.555 9.49264L13.1407 8.07843L14.2014 7.01777L15.6156 8.43198L14.555 9.49264Z" fill="currentColor"/>
+                </svg>
+                <span className="text-[14px] font-medium text-[#505258] font-['Inter var']">Format page</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={() => setShowFormatSuggestion(false)}
+            className="flex items-center justify-center w-10 h-10 bg-white rounded-[8pt] shadow-lg border border-[#DFE1E6] hover:bg-[#F4F5F7] transition-colors shrink-0"
+            disabled={isProcessing}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M13 1L1 13M1 1L13 13" stroke="#505258" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Floating Toolbar */}
       <div
         ref={toolbarRef}
@@ -315,6 +541,7 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
         suppressContentEditableWarning
         onInput={handleInput}
         onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
       />
     </div>
   );
@@ -451,6 +678,20 @@ const editorStyles: EditorStyles = {
   'heading-500': css`font-size: 12px; font-weight: 500;`,
   'heading-600': css`font-size: 11px; font-weight: 500;`,
 };
+
+// Add animation keyframes to your CSS
+const fadeInAnimation = css`
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+`;
 
 export default function Home() {
   const [content, setContent] = useState(`<div class="section">
