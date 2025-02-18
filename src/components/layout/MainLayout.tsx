@@ -1,22 +1,174 @@
 /** @jsxImportSource react */
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useRef, useEffect } from 'react';
 import { cn } from '../../lib/utils';
 import { Header } from '../navigation/Header';
 import { Sidebar } from '../navigation/Sidebar';
 import { AIPanel } from '../ui/AIPanel';
+import CommentIcon from '@atlaskit/icon/core/comment';
+import AlignLeftIcon from '@atlaskit/icon/core/align-left';
+import VideoIcon from '@atlaskit/icon/core/video';
+import AutomationIcon from '@atlaskit/icon/core/automation';
+import AppsIcon from '@atlaskit/icon/core/apps';
 
 interface MainLayoutProps {
   children: ReactNode;
   className?: string;
   selectedText?: string;
+  onTextSelect?: (text: string) => void;
+  editorContent?: string;
+  isAiPanelOpen: boolean;
+  setIsAiPanelOpen: (open: boolean) => void;
 }
 
-export function MainLayout({ children, className, selectedText }: MainLayoutProps) {
-  const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
+interface SelectionState {
+  text: string;
+  range: Range | null;
+  highlightElement: HTMLElement | null;
+}
+
+export function MainLayout({ 
+  children, 
+  className, 
+  selectedText, 
+  onTextSelect, 
+  editorContent,
+  isAiPanelOpen,
+  setIsAiPanelOpen 
+}: MainLayoutProps) {
+  const [referenceState, setReferenceState] = useState<SelectionState>({ text: '', range: null, highlightElement: null });
+  const mainContentRef = useRef<HTMLDivElement>(null);
+  const selectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const captureSelection = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return false;
+
+    const range = selection.getRangeAt(0);
+    const text = selection.toString().trim();
+    
+    if (!text) return false;
+
+    try {
+      // Create highlight element
+      const highlightSpan = document.createElement('span');
+      highlightSpan.className = 'reference-highlight';
+      
+      // Clone the range to avoid modifying the original selection
+      const clonedRange = range.cloneRange();
+      
+      // Surround the selected content with our highlight span
+      clonedRange.surroundContents(highlightSpan);
+      
+      // Store the reference state
+      setReferenceState({
+        text,
+        range: clonedRange,
+        highlightElement: highlightSpan
+      });
+      
+      // Notify parent components
+      if (onTextSelect) {
+        onTextSelect(text);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error applying highlight:', error);
+      return false;
+    }
+  };
+
+  const handleClearSelection = () => {
+    if (referenceState.highlightElement) {
+      try {
+        const parent = referenceState.highlightElement.parentNode;
+        if (parent) {
+          // Insert the text content before the highlight span
+          const textNode = document.createTextNode(referenceState.highlightElement.textContent || '');
+          parent.insertBefore(textNode, referenceState.highlightElement);
+          // Remove the highlight span
+          parent.removeChild(referenceState.highlightElement);
+          // Normalize to merge adjacent text nodes
+          parent.normalize();
+        }
+      } catch (error) {
+        console.error('Error clearing highlight:', error);
+      }
+    }
+
+    setReferenceState({ text: '', range: null, highlightElement: null });
+    if (onTextSelect) {
+      onTextSelect('');
+    }
+  };
 
   const toggleAiPanel = () => {
-    setIsAiPanelOpen(!isAiPanelOpen);
+    if (!isAiPanelOpen) {
+      // Try to capture selection if it exists
+      const selection = window.getSelection();
+      const hasSelection = selection && selection.toString().trim().length > 0;
+      
+      if (hasSelection) {
+        captureSelection();
+      }
+      
+      // Always open the panel
+      setIsAiPanelOpen(true);
+    } else {
+      // When closing, clear selection and close panel
+      handleClearSelection();
+      setIsAiPanelOpen(false);
+    }
   };
+
+  // Prevent selection changes when panel is open, except in the editor
+  useEffect(() => {
+    if (isAiPanelOpen) {
+      const handleSelectionChange = (e: Event) => {
+        // Get the target element
+        const target = e.target as Node;
+        const mainContent = mainContentRef.current;
+
+        // Allow selection if the target is within the main content area
+        if (mainContent && (mainContent === target || mainContent.contains(target))) {
+          // Clear any existing timeout
+          if (selectionTimeoutRef.current) {
+            clearTimeout(selectionTimeoutRef.current);
+          }
+
+          // Set a new timeout to handle the selection
+          selectionTimeoutRef.current = setTimeout(() => {
+            const selection = window.getSelection();
+            const hasSelection = selection && selection.toString().trim().length > 0;
+            
+            if (hasSelection) {
+              handleClearSelection();
+              captureSelection();
+            }
+          }, 100); // Small delay to allow selection to stabilize
+
+          return true;
+        }
+
+        // Prevent selection everywhere else
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      };
+
+      document.addEventListener('selectstart', handleSelectionChange, true);
+      document.addEventListener('selectionchange', handleSelectionChange, true);
+      
+      return () => {
+        document.removeEventListener('selectstart', handleSelectionChange, true);
+        document.removeEventListener('selectionchange', handleSelectionChange, true);
+        // Clear any existing timeout on cleanup
+        if (selectionTimeoutRef.current) {
+          clearTimeout(selectionTimeoutRef.current);
+        }
+      };
+    }
+  }, [isAiPanelOpen]);
 
   return (
     <div className={cn("min-h-screen bg-[#F9FAFB]", className)}>
@@ -24,6 +176,7 @@ export function MainLayout({ children, className, selectedText }: MainLayoutProp
       <div className="flex h-screen pt-[48px]">
         <Sidebar />
         <div 
+          ref={mainContentRef}
           className={cn(
             "flex-1 overflow-auto main-content relative transition-all duration-300 ease-in-out",
             isAiPanelOpen ? "mr-[400px]" : "mr-0"
@@ -38,32 +191,19 @@ export function MainLayout({ children, className, selectedText }: MainLayoutProp
             }}
           >
             <button className="w-9 h-9 flex items-center justify-center text-[#42526E] hover:bg-[#F4F5F7] rounded-md">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M4 11h16v2H4z" fill="currentColor"/>
-                <path d="M4 6h16v2H4zM4 16h16v2H4z" fill="currentColor"/>
-              </svg>
+              <CommentIcon label="" />
             </button>
             <button className="w-9 h-9 flex items-center justify-center text-[#42526E] hover:bg-[#F4F5F7] rounded-md">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M21 11v2h-8v8h-2v-8H3v-2h8V3h2v8h8z" fill="currentColor"/>
-              </svg>
+              <AlignLeftIcon label="" />
             </button>
             <button className="w-9 h-9 flex items-center justify-center text-[#42526E] hover:bg-[#F4F5F7] rounded-md">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z" fill="currentColor"/>
-                <path d="M7 12h10v2H7z" fill="currentColor"/>
-              </svg>
+              <VideoIcon label="" />
             </button>
             <button className="w-9 h-9 flex items-center justify-center text-[#42526E] hover:bg-[#F4F5F7] rounded-md">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" stroke="currentColor" strokeWidth="2"/>
-                <path d="M12 8v8M8 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
+              <AutomationIcon label="" />
             </button>
             <button className="w-9 h-9 flex items-center justify-center text-[#42526E] hover:bg-[#F4F5F7] rounded-md">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z" fill="currentColor"/>
-              </svg>
+              <AppsIcon label="" />
             </button>
           </div>
 
@@ -102,7 +242,9 @@ export function MainLayout({ children, className, selectedText }: MainLayoutProp
         <AIPanel 
           isOpen={isAiPanelOpen}
           onClose={toggleAiPanel}
-          selectedText={selectedText}
+          selectedText={referenceState.text || selectedText}
+          onClearSelection={handleClearSelection}
+          editorContent={editorContent}
         />
       </div>
     </div>

@@ -152,3 +152,51 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .animate-bubble-appear {
+    animation: bubble-appear 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    transform-origin: top left;
+  }
+}
+
+@keyframes bubble-appear {
+  0% {
+    opacity: 0;
+    transform: translate(
+      calc(var(--initial-x) - var(--x, 0px)),
+      calc(var(--initial-y) - var(--y, 0px))
+    ) scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+/* Reference highlight styles */
+.reference-highlight {
+  background-color: rgba(0, 101, 255, 0.2) !important;
+  border-radius: 2px;
+  padding: 2px 4px;
+  margin: 0 -4px;
+  box-shadow: 0 1px 3px rgba(0, 101, 255, 0.2);
+  transition: background-color 0.2s ease;
+  border: 1px solid rgba(0, 101, 255, 0.2);
+  display: inline;
+  position: relative;
+  pointer-events: none;
+  color: inherit;
+  font-size: inherit;
+  font-family: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  text-decoration: inherit;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.reference-highlight:hover {
+  background-color: rgba(0, 101, 255, 0.25) !important;
+}

@@ -34,6 +34,7 @@ import { TextEffect } from '../components/ui/text-effect';
 import { formatText } from '../lib/text-formatting';
 import { FormattingProgress, FormattingStep } from '../components/ui/FormattingProgress';
 import { createRoot } from 'react-dom/client';
+import { AIPanel } from '../components/ui/AIPanel';
 
 // Define interfaces for our editor
 interface EditorProps {
@@ -41,6 +42,7 @@ interface EditorProps {
   onChange: (value: string) => void;
   onTextSelect: (text: string) => void;
   className?: string;
+  onOpenAiPanel: () => void;
 }
 
 // Add these interfaces before the RichTextEditor component
@@ -58,7 +60,7 @@ interface ProcessedContent {
   changes: FormatChange[];
 }
 
-const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProps) => {
+const RichTextEditor = ({ value, onChange, onTextSelect, className, onOpenAiPanel }: EditorProps) => {
   const [isToolbarVisible, setIsToolbarVisible] = useState(false);
   const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
   const [showFormatSuggestion, setShowFormatSuggestion] = useState(false);
@@ -74,6 +76,7 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
   const [showChanges, setShowChanges] = useState(false);
   const [originalContent, setOriginalContent] = useState(value);
   const mainContentRootRef = useRef<ReturnType<typeof createRoot> | null>(null);
+  const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
 
   // Initialize editor content
   useEffect(() => {
@@ -101,17 +104,23 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
     }
   };
 
+  const handleSparkleClick = () => {
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) {
+      const text = selection.toString();
+      onTextSelect(text);
+      onOpenAiPanel();
+    }
+    setIsToolbarVisible(false);
+  };
+
   const updateToolbarPosition = () => {
     const selection = window.getSelection();
     
     if (!selection || selection.isCollapsed || !toolbarRef.current || !editorRef.current) {
       setIsToolbarVisible(false);
-      onTextSelect('');
       return;
     }
-
-    // Update selected text
-    onTextSelect(selection.toString());
 
     // Check if selection is within editor
     let node = selection.anchorNode;
@@ -126,25 +135,28 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
 
     if (!isWithinEditor) {
       setIsToolbarVisible(false);
-      onTextSelect('');
       return;
+    }
+
+    // Update selected text when selection changes
+    const text = selection.toString();
+    if (text) {
+      setSelectedText(text);
     }
 
     const range = selection.getRangeAt(0);
     const rect = range.getBoundingClientRect();
 
     // Calculate position relative to the viewport
-    // Use the left edge of the selection instead of the center
     const x = rect.left;
     const y = rect.top;
 
     // Position the toolbar
     if (toolbarRef.current) {
       const toolbarRect = toolbarRef.current.getBoundingClientRect();
-      const newX = x; // Don't center the toolbar anymore
-      const newY = y - toolbarRect.height - 8; // 8px gap
+      const newX = x;
+      const newY = y - toolbarRect.height - 8;
 
-      // Keep toolbar within viewport bounds
       const boundedX = Math.max(
         0,
         Math.min(newX, window.innerWidth - toolbarRect.width)
@@ -500,15 +512,15 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
           <>
             <TextEffect per="word" preset="blur" as="h2" className="text-[#172B4D] text-lg font-semibold mb-3">
               Summary
-            </TextEffect>
+                </TextEffect>
             <TextEffect per="word" preset="blur" className="text-[#42526E] text-base leading-relaxed">
               {formattedContent.summary}
-            </TextEffect>
+                </TextEffect>
           </>
         );
         
         contentWrapper.appendChild(summarySection);
-        editorRef.current.style.opacity = '1';
+            editorRef.current.style.opacity = '1';
         
         // Fade in summary
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -684,8 +696,204 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
     }
     
     // Close the format suggestion
-    setShowFormatSuggestion(false);
+      setShowFormatSuggestion(false);
   };
+
+  // Add effect to handle text selection
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      if (selection) {
+        const text = selection.toString();
+        setSelectedText(text);
+      }
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
+    };
+  }, []);
+
+  const handleTextSelect = (text: string) => {
+    setSelectedText(text);
+    // If text is empty, ensure browser selection is also cleared
+    if (!text) {
+      window.getSelection()?.removeAllRanges();
+    }
+  };
+
+  // Add effect to handle format changes from AIPanel
+  useEffect(() => {
+    const handleFormatChanges = (e: CustomEvent<{ content: string }>) => {
+      if (editorRef.current && e.detail.content) {
+        // Store original content for undo
+        setOriginalContent(editorRef.current.innerHTML);
+        
+        // Apply the formatted content
+        editorRef.current.innerHTML = e.detail.content;
+        setEditorContent(e.detail.content);
+        onChange(e.detail.content);
+        
+        // Show success state
+        setIsFormatComplete(true);
+        setShowFormatSuggestion(false);
+      }
+    };
+
+    const handleUndoFormatChanges = () => {
+      if (editorRef.current && originalContent) {
+        editorRef.current.innerHTML = originalContent;
+        setEditorContent(originalContent);
+        onChange(originalContent);
+        setIsFormatComplete(false);
+        setShowFormatSuggestion(false);
+      }
+    };
+
+    // Add event listeners
+    window.addEventListener('applyFormatChanges', handleFormatChanges as EventListener);
+    window.addEventListener('undoFormatChanges', handleUndoFormatChanges);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('applyFormatChanges', handleFormatChanges as EventListener);
+      window.removeEventListener('undoFormatChanges', handleUndoFormatChanges);
+    };
+  }, [onChange, originalContent]);
+
+  // Add effect to handle format events
+  useEffect(() => {
+    const handleStartFormatting = (e: Event) => {
+      const customEvent = e as CustomEvent<{ step: string }>;
+      if (editorRef.current) {
+        // Store original content
+        setOriginalContent(editorRef.current.innerHTML);
+        
+        // Fade out current content
+        editorRef.current.style.opacity = '0';
+        setTimeout(() => {
+          if (editorRef.current) {
+            // Clear and prepare container
+            editorRef.current.innerHTML = '';
+            const contentWrapper = document.createElement('div');
+            contentWrapper.className = 'py-8';
+            editorRef.current.appendChild(contentWrapper);
+            editorRef.current.style.opacity = '1';
+          }
+        }, 300);
+      }
+    };
+
+    const handleFormatStep = async (e: Event) => {
+      const customEvent = e as CustomEvent<{ step: string; content: string }>;
+      if (!editorRef.current) return;
+      const contentWrapper = editorRef.current.querySelector('div');
+      if (!contentWrapper) return;
+
+      switch (customEvent.detail.step) {
+        case 'summary':
+          // Render Summary with animation
+          const summarySection = document.createElement('section');
+          summarySection.className = 'mb-12 bg-[#F8F9FA] rounded-lg p-6 border border-[#DFE1E6] opacity-0 transition-opacity duration-300';
+          const summaryRoot = createRoot(summarySection);
+          summaryRoot.render(
+            <>
+              <TextEffect per="word" preset="blur" as="h2" className="text-[#172B4D] text-lg font-semibold mb-3">
+                Summary
+              </TextEffect>
+              <TextEffect per="word" preset="blur" className="text-[#42526E] text-base leading-relaxed">
+                {customEvent.detail.content}
+              </TextEffect>
+            </>
+          );
+          contentWrapper.appendChild(summarySection);
+          await new Promise(resolve => setTimeout(resolve, 100));
+          summarySection.style.opacity = '1';
+          break;
+
+        case 'toc':
+          // Render Table of Contents with animation
+          const tocSection = document.createElement('section');
+          tocSection.className = 'mb-12 opacity-0 transition-opacity duration-300';
+          const tocRoot = createRoot(tocSection);
+          tocRoot.render(
+            <>
+              <TextEffect per="word" preset="blur" as="h2" className="text-[#172B4D] text-xl font-semibold mb-4">
+                Table of Contents
+              </TextEffect>
+              <div className="bg-[#FAFBFC] rounded-lg p-5 border-l-4 border-[#0052CC]">
+                <div 
+                  className="space-y-1"
+                  dangerouslySetInnerHTML={{ 
+                    __html: customEvent.detail.content.split('\n').map(line => {
+                      if (line.startsWith('## ')) {
+                        const content = line.replace('## ', '');
+                        return `<div class="text-[#172B4D] font-medium text-[15px] mb-2">${content}</div>`;
+                      } else if (line.startsWith('### ')) {
+                        const content = line.replace('### ', '');
+                        return `<div class="text-[#42526E] text-[14px] ml-4 mb-1.5 hover:text-[#0052CC] cursor-pointer">${content}</div>`;
+                      }
+                      return line;
+                    }).join('')
+                  }}
+                />
+              </div>
+            </>
+          );
+          contentWrapper.appendChild(tocSection);
+          await new Promise(resolve => setTimeout(resolve, 100));
+          tocSection.style.opacity = '1';
+          break;
+
+        case 'content':
+          // Render main content with animation
+          const mainSection = document.createElement('section');
+          mainSection.className = 'opacity-0 transition-opacity duration-300';
+          const mainRoot = createRoot(mainSection);
+          mainRoot.render(
+            <div className="prose prose-slate max-w-none">
+              <div dangerouslySetInnerHTML={{ 
+                __html: customEvent.detail.content.split('\n').map(line => {
+                  const isChanged = hasLineChanged(line, originalContent);
+                  const highlightClass = isChanged ? 'bg-blue-50 border-b border-dotted border-blue-500' : '';
+
+                  if (line.startsWith('# ')) {
+                    const title = line.replace('# ', '');
+                    return `<div class="text-[24px] font-semibold text-[#172B4D] mb-6 mt-8 ${highlightClass}">${title}</div>`;
+                  }
+                  if (line.startsWith('## ')) {
+                    const title = line.replace('## ', '');
+                    return `<div class="text-[20px] font-medium text-[#172B4D] mb-4 mt-6 ${highlightClass}">${title}</div>`;
+                  }
+                  if (line.startsWith('---')) {
+                    return '<hr class="my-8 border-t border-[#DFE1E6]" />';
+                  }
+                  if (line.trim() && !line.startsWith('#') && !line.startsWith('---')) {
+                    return `<p class="text-[15px] leading-[1.6] text-[#42526E] mb-4 ${highlightClass}">${line}</p>`;
+                  }
+                  return line;
+                }).join('\n')
+              }} />
+            </div>
+          );
+          contentWrapper.appendChild(mainSection);
+          await new Promise(resolve => setTimeout(resolve, 100));
+          mainSection.style.opacity = '1';
+          break;
+      }
+    };
+
+    // Add event listeners
+    window.addEventListener('startFormatting', handleStartFormatting);
+    window.addEventListener('formatStep', handleFormatStep);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('startFormatting', handleStartFormatting);
+      window.removeEventListener('formatStep', handleFormatStep);
+    };
+  }, [originalContent]);
 
   return (
     <div className="relative">
@@ -700,7 +908,7 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
           {isFormatComplete ? (
             <>
               <div className="flex items-center gap-2">
-                <button 
+          <button 
                   className={`flex items-center gap-2 px-4 h-10 bg-white rounded-l-[8pt] shadow-lg border border-[#DFE1E6] hover:bg-[#F4F5F7] transition-all duration-300`}
                   onClick={handleChangesClick}
                 >
@@ -786,31 +994,31 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
             <div className="flex items-center">
               <button 
                 className={`flex items-center gap-2 px-4 h-10 bg-white rounded-l-[8pt] shadow-lg border border-[#DFE1E6] hover:bg-[#F4F5F7] transition-all duration-300 ${isProcessing ? 'min-w-[280px]' : ''}`}
-                onClick={handleFormat}
-                disabled={isProcessing}
-              >
-                {isProcessing ? (
+            onClick={handleFormat}
+            disabled={isProcessing}
+          >
+            {isProcessing ? (
                   <div className="flex items-center gap-2 w-full">
                     <FormattingProgress currentStep={currentStep} />
-                  </div>
-                ) : (
-                  <>
+              </div>
+            ) : (
+              <>
                     <svg className="w-4 h-4 text-[#357DE8] shrink-0" width="17" height="16" viewBox="0 0 17 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path fillRule="evenodd" clipRule="evenodd" d="M10.623 2V0H12.123V2H10.623ZM8.54456 3.48223L7.13034 2.06802L8.191 1.00736L9.60522 2.42157L8.54456 3.48223ZM15.6156 2.06802L14.2014 3.48223L13.1407 2.42157L14.555 1.00736L15.6156 2.06802ZM9.40068 4.16161C9.93765 3.62464 10.8083 3.62464 11.3452 4.16161L12.4613 5.27773C12.9983 5.8147 12.9983 6.6853 12.4613 7.22227L4.34522 15.3384C3.80825 15.8754 2.93765 15.8754 2.40068 15.3384L1.28456 14.2223C0.747593 13.6853 0.747594 12.8147 1.28456 12.2777L9.40068 4.16161ZM10.373 5.31066L8.93361 6.75L9.87295 7.68934L11.3123 6.25L10.373 5.31066ZM8.81229 8.75L7.87295 7.81066L2.43361 13.25L3.37295 14.1893L8.81229 8.75ZM16.623 6H14.623V4.5H16.623V6ZM14.555 9.49264L13.1407 8.07843L14.2014 7.01777L15.6156 8.43198L14.555 9.49264Z" fill="currentColor"/>
-                    </svg>
-                    <span className="text-[14px] font-medium text-[#505258] font-['Inter var']">Format page</span>
-                  </>
-                )}
-              </button>
-              <button
+                  <path fillRule="evenodd" clipRule="evenodd" d="M10.623 2V0H12.123V2H10.623ZM8.54456 3.48223L7.13034 2.06802L8.191 1.00736L9.60522 2.42157L8.54456 3.48223ZM15.6156 2.06802L14.2014 3.48223L13.1407 2.42157L14.555 1.00736L15.6156 2.06802ZM9.40068 4.16161C9.93765 3.62464 10.8083 3.62464 11.3452 4.16161L12.4613 5.27773C12.9983 5.8147 12.9983 6.6853 12.4613 7.22227L4.34522 15.3384C3.80825 15.8754 2.93765 15.8754 2.40068 15.3384L1.28456 14.2223C0.747593 13.6853 0.747594 12.8147 1.28456 12.2777L9.40068 4.16161ZM10.373 5.31066L8.93361 6.75L9.87295 7.68934L11.3123 6.25L10.373 5.31066ZM8.81229 8.75L7.87295 7.81066L2.43361 13.25L3.37295 14.1893L8.81229 8.75ZM16.623 6H14.623V4.5H16.623V6ZM14.555 9.49264L13.1407 8.07843L14.2014 7.01777L15.6156 8.43198L14.555 9.49264Z" fill="currentColor"/>
+                </svg>
+                <span className="text-[14px] font-medium text-[#505258] font-['Inter var']">Format page</span>
+              </>
+            )}
+          </button>
+          <button
                 onClick={handleDismiss}
                 className="flex items-center justify-center w-10 h-10 bg-white rounded-r-[8pt] shadow-lg border border-l-0 border-[#DFE1E6] hover:bg-[#F4F5F7] transition-colors shrink-0"
                 disabled={false} // Remove disabled state to allow dismissal during processing
-              >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M13 1L1 13M1 1L13 13" stroke="#505258" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M13 1L1 13M1 1L13 13" stroke="#505258" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
             </div>
           )}
         </div>
@@ -828,14 +1036,20 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className }: EditorProp
       >
         <button 
           className={styles.aiButton}
-          onClick={handleImproveWriting}
+          onClick={handleSparkleClick}
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
-            <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" 
-              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <defs>
+              <linearGradient id="sparkleGradient" gradientTransform="rotate(90)">
+                <stop offset="25%" stopColor="#0065FF" />
+                <stop offset="41%" stopColor="#4669FF" />
+                <stop offset="73%" stopColor="#BF63F3" />
+                <stop offset="86%" stopColor="#FFA900" />
+              </linearGradient>
+            </defs>
+            <path fillRule="evenodd" clipRule="evenodd" d="M1.5 3V4.5H3V3H4.5V1.5H3V0H1.5V1.5H0V3H1.5ZM8 1C8.30931 1 8.58689 1.18989 8.699 1.47817L10.3294 5.6706L14.5218 7.301C14.8101 7.41311 15 7.69069 15 8C15 8.30931 14.8101 8.58689 14.5218 8.699L10.3294 10.3294L8.699 14.5218C8.58689 14.8101 8.30931 15 8 15C7.69069 15 7.41311 14.8101 7.301 14.5218L5.6706 10.3294L1.47817 8.699C1.18989 8.58689 1 8.30931 1 8C1 7.69069 1.18989 7.41311 1.47817 7.301L5.6706 5.6706L7.301 1.47817C7.41311 1.18989 7.69069 1 8 1Z" fill="url(#sparkleGradient)"/>
           </svg>
-          Improve writing
-          <span className={styles.tooltip}>AI writing suggestions</span>
+          <span className={styles.tooltip}>AI suggestions</span>
         </button>
         <div className={styles.divider} />
         <div className={styles.dropdown}>
@@ -1071,7 +1285,17 @@ const fadeInAnimation = css`
 `;
 
 export default function Home() {
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState(`Project Alpha is a new initiative aimed at transforming the way teams collaborate and innovate within fast-paced environments. It is designed to streamline workflows, enhance cross-functional communication, and drive efficiency through a combination of AI-driven insights and intuitive user experiences. The project's primary focus is to eliminate common friction points in team coordination by providing real-time data synchronization, smart task delegation, and automated progress tracking.
+
+One of the core challenges in modern work environments is information fragmentation. Teams often struggle with multiple disconnected tools, leading to misalignment and duplicated efforts. Project Alpha addresses this by integrating seamlessly with existing platforms, acting as a central hub that connects various workstreams into a cohesive system. The AI-powered assistant suggests optimizations based on usage patterns, helping teams prioritize effectively and make data-driven decisions.
+
+A key component of Project Alpha is its adaptability. It is built to support teams of all sizes, from startups to large enterprises, with customizable workflows that can be tailored to specific needs. By leveraging predictive analytics, it anticipates bottlenecks and recommends solutions proactively, ensuring that teams remain agile and responsive to changing demands.
+
+Security and data privacy are also fundamental to Project Alpha. The platform employs robust encryption protocols and access controls to safeguard sensitive information, ensuring compliance with industry standards and regulations. With a focus on transparency, users have full visibility into how their data is managed and utilized within the system.
+
+Early user feedback has highlighted significant productivity gains and improved alignment across departments. Teams report faster decision-making, reduced meeting times, and a more structured approach to project execution. As the platform continues to evolve, future updates will introduce enhanced automation, deeper integrations, and more advanced AI-driven insights.
+
+Project Alpha represents a shift towards a smarter, more efficient way of working, empowering teams to focus on high-impact tasks while minimizing operational overhead. It is a solution built for the modern workforce, designed to turn collaboration challenges into opportunities for growth and innovation.`);
   const [showFormatSuggestion, setShowFormatSuggestion] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
@@ -1086,6 +1310,7 @@ export default function Home() {
   } | null>(null);
 
   const [selectedText, setSelectedText] = useState('');
+  const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
 
   const breadcrumbItems = [
     { label: 'Vitafleet', href: '/vitafleet' },
@@ -1174,8 +1399,38 @@ export default function Home() {
     }
   };
 
+  // Add effect to handle text selection
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      if (selection) {
+        const text = selection.toString();
+        setSelectedText(text);
+      }
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
+    };
+  }, []);
+
+  const handleTextSelect = (text: string) => {
+    setSelectedText(text);
+    // If text is empty, ensure browser selection is also cleared
+    if (!text) {
+      window.getSelection()?.removeAllRanges();
+    }
+  };
+
   return (
-    <MainLayout selectedText={selectedText}>
+    <MainLayout 
+      selectedText={selectedText} 
+      onTextSelect={handleTextSelect}
+      editorContent={content}
+      isAiPanelOpen={isAiPanelOpen}
+      setIsAiPanelOpen={setIsAiPanelOpen}
+    >
       <PageHeader 
         title="Strategy Planning" 
         breadcrumbItems={breadcrumbItems}
@@ -1185,9 +1440,25 @@ export default function Home() {
       <div className="flex">
         <main className="flex-1">
           <div className="px-10 py-6 bg-white flex justify-center">
-            <div className="max-w-[1024px] w-full">
+            <div className="max-w-[960px] w-full">
               <div className="relative">
                 <div className="min-h-[calc(100vh-250px)]">
+                  {/* Title section */}
+                  <div className="mb-6 mt-10">
+                    <h1 
+                      className="text-[28px] font-semibold text-[#172B4D] leading-[1.25] outline-none"
+                      contentEditable
+                      suppressContentEditableWarning
+                      onBlur={(e) => {
+                        // Handle title update if needed
+                        const newTitle = e.currentTarget.textContent;
+                      }}
+                      spellCheck={false}
+                    >
+                      Strategy Planning
+                    </h1>
+                  </div>
+
                   {/* Document metadata section */}
                   <div className="pb-4 mb-6 border-b border-[#DFE1E6]">
                     <div className="flex items-center gap-2 mb-2">
@@ -1215,25 +1486,14 @@ export default function Home() {
                   </div>
 
                   <div className="flex flex-col items-center w-full">
-                    <div className="max-w-[1024px] w-full">
+                    <div className="max-w-[960px] w-full">
                       <div className="flex flex-col">
-                        <div className="flex items-center gap-2 mb-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-[#E3FCEF] flex items-center justify-center">
-                              <span className="text-[#006644] text-sm">VF</span>
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="text-[#172B4D] text-sm font-medium">VitaFleet</span>
-                              <span className="text-[#42526E] text-xs">Approved by John Smith</span>
-                            </div>
-                          </div>
-                        </div>
-                        
                         <RichTextEditor
                     value={content}
                           onChange={setContent}
-                          onTextSelect={setSelectedText}
+                          onTextSelect={handleTextSelect}
                           className={editorStyles.section.toString()}
+                          onOpenAiPanel={() => setIsAiPanelOpen(true)}
                         />
                       </div>
                     </div>

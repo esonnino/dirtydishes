@@ -9,8 +9,8 @@ import ShareIcon from '@atlaskit/icon/glyph/share';
 import LinkIcon from '@atlaskit/icon/glyph/link';
 import WatchIcon from '@atlaskit/icon/glyph/watch';
 import PageIcon from '@atlaskit/icon/glyph/page';
-import Breadcrumbs, { BreadcrumbsItem } from '@atlaskit/breadcrumbs';
 import { HeaderAvatars } from './HeaderAvatars';
+import Link from 'next/link';
 
 interface PageHeaderProps {
   title: string;
@@ -29,21 +29,28 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, breadcrumbItems, metadata }: PageHeaderProps) {
   return (
-    <div className="sticky top-0 z-40 bg-white">
-      <div className="h-[56px] px-5 flex items-center justify-between border-b border-[#DFE1E6]">
-        <div className="flex items-center space-x-2">
-          <Breadcrumbs>
-            {breadcrumbItems.map((item) => (
-              <BreadcrumbsItem key={item.href} href={item.href} text={item.label} />
+    <div className="sticky top-0 z-40 bg-white h-[56px]">
+      <div className="h-full px-5 flex items-center justify-between border-b border-[#DFE1E6]">
+        <div className="flex items-center">
+          <nav className="flex items-center">
+            {breadcrumbItems.map((item, index) => (
+              <div key={item.href} className="flex items-center">
+                {index > 0 && (
+                  <span className="mx-2 text-[#626F86]">/</span>
+                )}
+                <Link 
+                  href={item.href}
+                  className="text-[#626F86] hover:text-[#0052CC] hover:underline font-['SF Pro'] text-[14px] font-medium"
+                >
+                  {item.label}
+                </Link>
+              </div>
             ))}
-          </Breadcrumbs>
-          <div className="bg-[#FFF0B3] px-2 py-0.5 rounded">
-            <Badge appearance="default">Confidential</Badge>
-          </div>
+          </nav>
         </div>
         <div className="flex items-center space-x-4">
           <div className="flex items-center text-sm text-[#42526E]">
-            <span>Last updated just now</span>
+           
             <HeaderAvatars />
             <span>2</span>
           </div>

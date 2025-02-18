@@ -2,7 +2,7 @@
 .editor {
   width: 100%;
   min-height: calc(100vh - 320px);
-  padding: 24px;
+  padding: 24px 24px 24px 0;
   background: white;
   color: #172B4D;
   font-size: 15px;
