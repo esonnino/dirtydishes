@@ -109,17 +109,35 @@ export function MainLayout({
       const hasSelection = selection && selection.toString().trim().length > 0;
       
       if (hasSelection) {
+        // Capture the selection before opening the panel
         captureSelection();
       }
       
-      // Always open the panel
+      // Open the panel
       setIsAiPanelOpen(true);
     } else {
-      // When closing, clear selection and close panel
+      // When closing, always clear selection and highlight
       handleClearSelection();
+      // Clear any existing selection
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+      }
       setIsAiPanelOpen(false);
     }
   };
+
+  // Add effect to clear highlight when panel is closed
+  useEffect(() => {
+    if (!isAiPanelOpen) {
+      handleClearSelection();
+      // Clear any existing selection
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+      }
+    }
+  }, [isAiPanelOpen]);
 
   // Prevent selection changes when panel is open, except in the editor
   useEffect(() => {
@@ -156,12 +174,18 @@ export function MainLayout({
         return false;
       };
 
+      const handleClearHighlight = () => {
+        handleClearSelection();
+      };
+
       document.addEventListener('selectstart', handleSelectionChange, true);
       document.addEventListener('selectionchange', handleSelectionChange, true);
+      window.addEventListener('clearReferenceHighlight', handleClearHighlight);
       
       return () => {
         document.removeEventListener('selectstart', handleSelectionChange, true);
         document.removeEventListener('selectionchange', handleSelectionChange, true);
+        window.removeEventListener('clearReferenceHighlight', handleClearHighlight);
         // Clear any existing timeout on cleanup
         if (selectionTimeoutRef.current) {
           clearTimeout(selectionTimeoutRef.current);
@@ -172,7 +196,10 @@ export function MainLayout({
 
   return (
     <div className={cn("min-h-screen bg-[#F9FAFB]", className)}>
-      <Header />
+      <Header 
+        isAiPanelOpen={isAiPanelOpen}
+        onTextSelect={onTextSelect}
+      />
       <div className="flex h-screen pt-[48px]">
         <Sidebar />
         <div 

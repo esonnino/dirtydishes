@@ -1,16 +1,18 @@
 'use client';
 
 import { cn } from '../../lib/utils';
-import Button from '@atlaskit/button';
+import Button, { IconButton, SplitButton } from '@atlaskit/button/new';
 import Badge from '@atlaskit/badge';
 import StarIcon from '@atlaskit/icon/glyph/star';
-import MoreIcon from '@atlaskit/icon/glyph/more';
-import ShareIcon from '@atlaskit/icon/glyph/share';
+import UnlockIcon from '@atlaskit/icon/glyph/unlock';
 import LinkIcon from '@atlaskit/icon/glyph/link';
+import MoreIcon from '@atlaskit/icon/glyph/more';
 import WatchIcon from '@atlaskit/icon/glyph/watch';
 import PageIcon from '@atlaskit/icon/glyph/page';
-import { HeaderAvatars } from './HeaderAvatars';
+import AvatarGroup from '@atlaskit/avatar-group';
 import Link from 'next/link';
+import Toggle from '@atlaskit/toggle';
+import DropdownMenu, { DropdownItem, DropdownItemGroup } from '@atlaskit/dropdown-menu';
 
 interface PageHeaderProps {
   title: string;
@@ -25,11 +27,37 @@ interface PageHeaderProps {
     views: number;
     reactions: number;
   };
+  isAiPanelOpen?: boolean;
+  onTextSelect?: (text: string) => void;
 }
 
-export function PageHeader({ title, breadcrumbItems, metadata }: PageHeaderProps) {
+export function PageHeader({ 
+  title, 
+  breadcrumbItems, 
+  metadata,
+  isAiPanelOpen,
+  onTextSelect 
+}: PageHeaderProps) {
+  const avatarUsers = [
+    { name: metadata.author.name, src: metadata.author.avatar },
+    { name: 'Collaborator', src: 'https://i.pravatar.cc/32?img=2' }
+  ];
+
+  const handleSelectionChange = () => {
+    if (isAiPanelOpen && onTextSelect) {
+      const selection = window.getSelection();
+      const selectedText = selection?.toString().trim();
+      if (selectedText) {
+        onTextSelect(selectedText);
+      }
+    }
+  };
+
   return (
-    <div className="sticky top-0 z-40 bg-white h-[56px]">
+    <div 
+      className="sticky top-0 z-40 bg-white h-[56px]"
+      onMouseUp={handleSelectionChange}
+    >
       <div className="h-full px-5 flex items-center justify-between border-b border-[#DFE1E6]">
         <div className="flex items-center">
           <nav className="flex items-center">
@@ -50,36 +78,47 @@ export function PageHeader({ title, breadcrumbItems, metadata }: PageHeaderProps
         </div>
         <div className="flex items-center space-x-4">
           <div className="flex items-center text-sm text-[#42526E]">
-           
-            <HeaderAvatars />
+            <AvatarGroup
+              appearance="stack"
+              size="small"
+              data={avatarUsers}
+            />
             <span>2</span>
           </div>
           <div className="flex items-center space-x-2">
-            <div className="flex items-center space-x-2 text-[#42526E]">
-              <span>Editing</span>
-              <div className="w-8 h-4 bg-[#36B37E] rounded-full flex items-center px-0.5">
-                <div className="w-3 h-3 bg-white rounded-full ml-auto"></div>
-              </div>
+            <span className="text-[#505258] font-['SF Pro'] font-medium text-[14px]">Editing</span>
+            <div className="scale-75 origin-center">
+              <Toggle
+                isChecked={true}
+              />
             </div>
-            <div className="h-4 w-px bg-[#DFE1E6]"></div>
-            <Button
-              iconBefore={<ShareIcon label="Share" />}
-              appearance="default"
-              spacing="compact"
-            >
-              Share
-            </Button>
-            <Button
-              iconBefore={<LinkIcon label="Copy link" />}
-              appearance="subtle"
-              spacing="compact"
-            />
-            <Button
-              iconBefore={<MoreIcon label="More" />}
-              appearance="subtle"
-              spacing="compact"
-            />
           </div>
+          <div className="h-8 w-px bg-[#091E42]/[0.14]"></div>
+          <div className="h-8 border border-[#091E42]/[0.14] rounded flex">
+            <SplitButton>
+              <Button iconBefore={UnlockIcon} appearance="subtle">Share</Button>
+              <DropdownMenu<HTMLButtonElement>
+                trigger={({ triggerRef, ...triggerProps }) => (
+                  <IconButton
+                    ref={triggerRef}
+                    {...triggerProps}
+                    icon={LinkIcon}
+                    label="Copy link"
+                    appearance="subtle"
+                  />
+                )}
+              >
+                <DropdownItemGroup>
+                  <DropdownItem>Copy link</DropdownItem>
+                </DropdownItemGroup>
+              </DropdownMenu>
+            </SplitButton>
+          </div>
+          <IconButton
+            icon={MoreIcon}
+            label="More"
+            appearance="subtle"
+          />
         </div>
       </div>
     </div>

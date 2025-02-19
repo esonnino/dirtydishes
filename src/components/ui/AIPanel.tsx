@@ -456,6 +456,9 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, selectedText,
     if (onClearSelection) {
       onClearSelection();
     }
+    // Dispatch event to clear highlight
+    const event = new CustomEvent('clearReferenceHighlight');
+    window.dispatchEvent(event);
   };
 
   const handleBackToMain = () => {
@@ -1001,7 +1004,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, selectedText,
         {/* Referencing box - Now always visible when there's selected text */}
         {selectedText && (
           <div className={cn(
-            "absolute top-[64px] left-6 right-6 transition-all duration-300 ease-in-out",
+            "absolute top-[54px] left-6 right-6 transition-all duration-300 ease-in-out",
             "opacity-100 translate-y-0"
           )}>
             <div className="relative bg-white border border-[#DFE1E6] rounded-md shadow-sm group">
@@ -1171,7 +1174,43 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, selectedText,
                       )}
                     </div>
                   ) : (
-                    <span className="text-[12px] text-[#475467]">{message.content}</span>
+                    <div className="relative">
+                      <span className="text-[12px] text-[#475467]">{message.content}</span>
+                      {message.sender === 'assistant' && (
+                        <div className="absolute left-0 right-0 -bottom-8 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-2 justify-end">
+                          <button
+                            onClick={() => {
+                              const event = new CustomEvent('replaceText', {
+                                detail: { content: message.content }
+                              });
+                              window.dispatchEvent(event);
+                            }}
+                            className="px-2 py-1 text-[11px] font-medium text-[#475467] hover:text-[#344054] hover:bg-[#F2F4F7] rounded transition-colors"
+                          >
+                            Replace
+                          </button>
+                          <button
+                            onClick={() => {
+                              const event = new CustomEvent('insertText', {
+                                detail: { content: message.content }
+                              });
+                              window.dispatchEvent(event);
+                            }}
+                            className="px-2 py-1 text-[11px] font-medium text-[#475467] hover:text-[#344054] hover:bg-[#F2F4F7] rounded transition-colors"
+                          >
+                            Insert
+                          </button>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(message.content);
+                            }}
+                            className="px-2 py-1 text-[11px] font-medium text-[#475467] hover:text-[#344054] hover:bg-[#F2F4F7] rounded transition-colors"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                   {!message.content.includes('<FormatChanges>') && message.tags && message.tags.length > 0 && (
                     <div className="flex gap-2 mt-2">

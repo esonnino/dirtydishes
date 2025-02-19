@@ -107,9 +107,30 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className, onOpenAiPane
   const handleSparkleClick = () => {
     const selection = window.getSelection();
     if (selection && !selection.isCollapsed) {
-      const text = selection.toString();
-      onTextSelect(text);
-      onOpenAiPanel();
+      const text = selection.toString().trim();
+      if (text) {
+        // Create highlight element
+        const range = selection.getRangeAt(0);
+        const highlightSpan = document.createElement('span');
+        highlightSpan.className = 'reference-highlight';
+        
+        try {
+          // Clone the range to avoid modifying the original selection
+          const clonedRange = range.cloneRange();
+          
+          // Surround the selected content with our highlight span
+          clonedRange.surroundContents(highlightSpan);
+          
+          // Notify parent components
+          onTextSelect(text);
+          onOpenAiPanel();
+        } catch (error) {
+          console.error('Error applying highlight:', error);
+          // If highlighting fails, still open panel with selected text
+          onTextSelect(text);
+          onOpenAiPanel();
+        }
+      }
     }
     setIsToolbarVisible(false);
   };

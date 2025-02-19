@@ -7,9 +7,27 @@ import NotificationIcon from '@atlaskit/icon/core/notification';
 import QuestionCircleIcon from '@atlaskit/icon/core/question-circle';
 import SettingsIcon from '@atlaskit/icon/core/settings';
 
-export function Header() {
+interface HeaderProps {
+  isAiPanelOpen?: boolean;
+  onTextSelect?: (text: string) => void;
+}
+
+export function Header({ isAiPanelOpen, onTextSelect }: HeaderProps) {
+  const handleSelectionChange = () => {
+    if (isAiPanelOpen && onTextSelect) {
+      const selection = window.getSelection();
+      const selectedText = selection?.toString().trim();
+      if (selectedText) {
+        onTextSelect(selectedText);
+      }
+    }
+  };
+
   return (
-    <header className="h-[48px] bg-white border-b border-[#DFE1E6] fixed top-0 left-0 right-0 z-50">
+    <header 
+      className="h-[48px] bg-white border-b border-[#DFE1E6] fixed top-0 left-0 right-0 z-50"
+      onMouseUp={handleSelectionChange}
+    >
       <div className="flex items-center h-full px-3 py-2">
         {/* Left section */}
         <div className="flex items-center space-x-6 w-[240px]">
