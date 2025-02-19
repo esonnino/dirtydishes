@@ -91,22 +91,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, selectedText,
   ]);
   const inputRef = useRef<HTMLInputElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
-
-  // Add effect to focus input when panel opens
-  useEffect(() => {
-    if (isOpen) {
-      const timeoutId = setTimeout(() => {
-        const input = isChatMode ? chatInputRef.current : inputRef.current;
-        if (input) {
-          input.focus();
-          const len = input.value.length;
-          input.setSelectionRange(len, len);
-        }
-      }, 100);
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [isOpen, isChatMode]);
+  const [isReferencing, setIsReferencing] = useState(false);
 
   // Add debounce utility
   const debounce = (func: Function, wait: number) => {
@@ -116,34 +101,6 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, selectedText,
       timeout = setTimeout(() => func(...args), wait);
     };
   };
-
-  // Debounced version of fetchSuggestions
-  const debouncedFetchSuggestions = useCallback(
-    debounce((text: string) => {
-      if (text) {
-        setIsLoadingSuggestions(true);
-        fetchSuggestions(text);
-      }
-    }, 500),
-    []
-  );
-
-  // Update the useEffect to use the debounced version
-  useEffect(() => {
-    setSearchQuery(''); // Always reset search query when selectedText changes
-    
-    if (selectedText) {
-      debouncedFetchSuggestions(selectedText);
-    } else {
-      setAiSuggestions([]); // Clear suggestions when no text is selected
-      setIsLoadingSuggestions(false);
-    }
-
-    // Cleanup function
-    return () => {
-      setIsLoadingSuggestions(false);
-    };
-  }, [selectedText, debouncedFetchSuggestions]);
 
   // Separate fetchSuggestions function for better organization
   const fetchSuggestions = async (text: string) => {
@@ -214,6 +171,63 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, selectedText,
       setIsLoadingSuggestions(false);
     }
   };
+
+  // Debounced version of fetchSuggestions
+  const debouncedFetchSuggestions = useCallback(
+    debounce(async (text: string) => {
+      if (text) {
+        setIsLoadingSuggestions(true);
+        await fetchSuggestions(text);
+      }
+    }, 500),
+    []
+  );
+
+  // Single effect to handle all panel state changes
+  useEffect(() => {
+    if (!isOpen) {
+      // Reset all states when panel is closed
+      setIsChatMode(false);
+      setIsReferencing(false);
+      setSearchQuery('');
+      setCurrentQuery('');
+      setMessages([]);
+      setAiSuggestions([]);
+      setIsLoadingSuggestions(false);
+      return;
+    }
+
+    if (selectedText) {
+      // Handle selected text state
+      setIsChatMode(false);
+      setIsReferencing(true);
+      setSearchQuery('');
+      setCurrentQuery('');
+      setMessages([]);
+      debouncedFetchSuggestions(selectedText);
+    } else {
+      // Reset states when no text is selected
+      setIsReferencing(false);
+      setAiSuggestions([]);
+      setIsLoadingSuggestions(false);
+    }
+  }, [isOpen, selectedText, debouncedFetchSuggestions]);
+
+  // Add effect to focus input when panel opens
+  useEffect(() => {
+    if (isOpen) {
+      const timeoutId = setTimeout(() => {
+        const input = isChatMode ? chatInputRef.current : inputRef.current;
+        if (input) {
+          input.focus();
+          const len = input.value.length;
+          input.setSelectionRange(len, len);
+        }
+      }, 100);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isOpen, isChatMode]);
 
   // Define all items
   const suggestions: Suggestion[] = [
@@ -904,7 +918,9 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, selectedText,
       {/* Header */}
       <div className={cn(
         "relative px-6 pt-3 pb-1 transition-all duration-300 ease-in-out",
-        selectedText ? "h-[136px] bg-[#F8F8F8]" : "h-[112px]"
+        isReferencing || selectedText
+          ? "h-[136px] bg-[#F8F8F8]"
+          : "h-[112px]"
       )}>
         {/* Back button and chat header - Only show in chat mode */}
         <div className={cn(
@@ -990,7 +1006,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, selectedText,
             {/* Default greeting */}
             <div className={cn(
               "absolute w-full transition-all duration-300 ease-in-out",
-              selectedText 
+              isReferencing || selectedText
                 ? "opacity-0 -translate-y-4 pointer-events-none" 
                 : "opacity-100 translate-y-0"
             )}>
@@ -1002,7 +1018,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, selectedText,
         </div>
 
         {/* Referencing box - Now always visible when there's selected text */}
-        {selectedText && (
+        {(isReferencing || selectedText) && (
           <div className={cn(
             "absolute top-[54px] left-6 right-6 transition-all duration-300 ease-in-out",
             "opacity-100 translate-y-0"
@@ -1067,7 +1083,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({ isOpen, onClose, selectedText,
                       <div className="w-5 h-5 shrink-0">
                         <svg className="animate-spin" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 0 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
                       </div>
                       <div className="text-[14px] font-medium font-['Inter var'] flex-1 whitespace-nowrap">

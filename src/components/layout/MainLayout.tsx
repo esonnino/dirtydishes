@@ -123,25 +123,51 @@ export function MainLayout({
       if (selection) {
         selection.removeAllRanges();
       }
+      // Also clear any highlights from the text selection toolbar
+      const highlights = document.querySelectorAll('.reference-highlight');
+      highlights.forEach(highlight => {
+        const parent = highlight.parentNode;
+        if (parent) {
+          // Insert the text content before the highlight span
+          const textNode = document.createTextNode(highlight.textContent || '');
+          parent.insertBefore(textNode, highlight);
+          // Remove the highlight span
+          parent.removeChild(highlight);
+          // Normalize to merge adjacent text nodes
+          parent.normalize();
+        }
+      });
       setIsAiPanelOpen(false);
     }
   };
 
-  // Add effect to clear highlight when panel is closed
-  useEffect(() => {
-    if (!isAiPanelOpen) {
-      handleClearSelection();
-      // Clear any existing selection
-      const selection = window.getSelection();
-      if (selection) {
-        selection.removeAllRanges();
-      }
-    }
-  }, [isAiPanelOpen]);
-
   // Prevent selection changes when panel is open, except in the editor
   useEffect(() => {
     if (isAiPanelOpen) {
+      const handleMouseDown = (e: Event) => {
+        // Get the target element
+        const target = e.target as Node;
+        const mainContent = mainContentRef.current;
+
+        // Allow selection if the target is within the main content area
+        if (mainContent && (mainContent === target || mainContent.contains(target))) {
+          // Clear current highlighting and referenced text immediately when selection starts
+          handleClearSelection();
+          // Also clear any highlights from the text selection toolbar
+          const highlights = document.querySelectorAll('.reference-highlight');
+          highlights.forEach(highlight => {
+            const parent = highlight.parentNode;
+            if (parent) {
+              const textNode = document.createTextNode(highlight.textContent || '');
+              parent.insertBefore(textNode, highlight);
+              parent.removeChild(highlight);
+              parent.normalize();
+            }
+          });
+          return true;
+        }
+      };
+
       const handleSelectionChange = (e: Event) => {
         // Get the target element
         const target = e.target as Node;
@@ -160,8 +186,25 @@ export function MainLayout({
             const hasSelection = selection && selection.toString().trim().length > 0;
             
             if (hasSelection) {
+              // First clear any existing highlights
               handleClearSelection();
-              captureSelection();
+              // Also clear any highlights from the text selection toolbar
+              const highlights = document.querySelectorAll('.reference-highlight');
+              highlights.forEach(highlight => {
+                const parent = highlight.parentNode;
+                if (parent) {
+                  const textNode = document.createTextNode(highlight.textContent || '');
+                  parent.insertBefore(textNode, highlight);
+                  parent.removeChild(highlight);
+                  parent.normalize();
+                }
+              });
+
+              // Small delay to ensure the previous highlights are cleared
+              setTimeout(() => {
+                // Now capture the new selection
+                captureSelection();
+              }, 50);
             }
           }, 100); // Small delay to allow selection to stabilize
 
@@ -176,14 +219,25 @@ export function MainLayout({
 
       const handleClearHighlight = () => {
         handleClearSelection();
+        // Also clear any highlights from the text selection toolbar
+        const highlights = document.querySelectorAll('.reference-highlight');
+        highlights.forEach(highlight => {
+          const parent = highlight.parentNode;
+          if (parent) {
+            const textNode = document.createTextNode(highlight.textContent || '');
+            parent.insertBefore(textNode, highlight);
+            parent.removeChild(highlight);
+            parent.normalize();
+          }
+        });
       };
 
-      document.addEventListener('selectstart', handleSelectionChange, true);
+      document.addEventListener('mousedown', handleMouseDown, true);
       document.addEventListener('selectionchange', handleSelectionChange, true);
       window.addEventListener('clearReferenceHighlight', handleClearHighlight);
       
       return () => {
-        document.removeEventListener('selectstart', handleSelectionChange, true);
+        document.removeEventListener('mousedown', handleMouseDown, true);
         document.removeEventListener('selectionchange', handleSelectionChange, true);
         window.removeEventListener('clearReferenceHighlight', handleClearHighlight);
         // Clear any existing timeout on cleanup
