@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import ProtectedLayout from "@/components/ProtectedLayout";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Strategy Planning - Vitafleet",
-  description: "Vitafleet strategy planning and documentation",
+  title: "Rovo Prototype",
+  description: "Rovo AI assistant prototype",
 };
 
 export default function RootLayout({
@@ -16,7 +17,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <ProtectedLayout>
+          {children}
+        </ProtectedLayout>
+      </body>
     </html>
   );
 }

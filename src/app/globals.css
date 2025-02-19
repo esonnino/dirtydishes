@@ -24,6 +24,18 @@
   }
 }
 
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-8px);
+  }
+  75% {
+    transform: translateX(8px);
+  }
+}
+
 @keyframes textBlur {
   0% {
     filter: blur(8px);
@@ -53,6 +65,10 @@
 
 .animate-slide-in {
   animation: slideIn 0.3s ease-out;
+}
+
+.animate-shake {
+  animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
 .animate-text-blur {
