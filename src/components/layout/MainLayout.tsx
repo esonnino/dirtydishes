@@ -66,7 +66,7 @@ export function MainLayout({
         highlightElement: highlightSpan
       });
       
-      // Notify parent components
+      // Notify parent components - this will update the AIPanel
       if (onTextSelect) {
         onTextSelect(text);
       }
@@ -74,6 +74,10 @@ export function MainLayout({
       return true;
     } catch (error) {
       console.error('Error applying highlight:', error);
+      // Even if highlighting fails, still notify parent components
+      if (onTextSelect && text) {
+        onTextSelect(text);
+      }
       return false;
     }
   };
@@ -168,6 +172,25 @@ export function MainLayout({
         }
       };
 
+      const handleMouseUp = (e: Event) => {
+        // Get the target element
+        const target = e.target as Node;
+        const mainContent = mainContentRef.current;
+
+        // Check if mouse up is within the main content area
+        if (mainContent && (mainContent === target || mainContent.contains(target))) {
+          // Check if there's a selection
+          const selection = window.getSelection();
+          const hasSelection = selection && selection.toString().trim().length > 0;
+          
+          if (hasSelection) {
+            // Capture the selection on mouse up
+            captureSelection();
+          }
+          return true;
+        }
+      };
+
       const handleSelectionChange = (e: Event) => {
         // Get the target element
         const target = e.target as Node;
@@ -180,33 +203,28 @@ export function MainLayout({
             clearTimeout(selectionTimeoutRef.current);
           }
 
-          // Set a new timeout to handle the selection
-          selectionTimeoutRef.current = setTimeout(() => {
-            const selection = window.getSelection();
-            const hasSelection = selection && selection.toString().trim().length > 0;
-            
-            if (hasSelection) {
-              // First clear any existing highlights
-              handleClearSelection();
-              // Also clear any highlights from the text selection toolbar
-              const highlights = document.querySelectorAll('.reference-highlight');
-              highlights.forEach(highlight => {
-                const parent = highlight.parentNode;
-                if (parent) {
-                  const textNode = document.createTextNode(highlight.textContent || '');
-                  parent.insertBefore(textNode, highlight);
-                  parent.removeChild(highlight);
-                  parent.normalize();
-                }
-              });
+          // Process the selection immediately after mouse up
+          const selection = window.getSelection();
+          const hasSelection = selection && selection.toString().trim().length > 0;
+          
+          if (hasSelection) {
+            // First clear any existing highlights
+            handleClearSelection();
+            // Also clear any highlights from the text selection toolbar
+            const highlights = document.querySelectorAll('.reference-highlight');
+            highlights.forEach(highlight => {
+              const parent = highlight.parentNode;
+              if (parent) {
+                const textNode = document.createTextNode(highlight.textContent || '');
+                parent.insertBefore(textNode, highlight);
+                parent.removeChild(highlight);
+                parent.normalize();
+              }
+            });
 
-              // Small delay to ensure the previous highlights are cleared
-              setTimeout(() => {
-                // Now capture the new selection
-                captureSelection();
-              }, 50);
-            }
-          }, 100); // Small delay to allow selection to stabilize
+            // Capture the new selection immediately
+            captureSelection();
+          }
 
           return true;
         }
@@ -233,11 +251,13 @@ export function MainLayout({
       };
 
       document.addEventListener('mousedown', handleMouseDown, true);
+      document.addEventListener('mouseup', handleMouseUp, true);
       document.addEventListener('selectionchange', handleSelectionChange, true);
       window.addEventListener('clearReferenceHighlight', handleClearHighlight);
       
       return () => {
         document.removeEventListener('mousedown', handleMouseDown, true);
+        document.removeEventListener('mouseup', handleMouseUp, true);
         document.removeEventListener('selectionchange', handleSelectionChange, true);
         window.removeEventListener('clearReferenceHighlight', handleClearHighlight);
         // Clear any existing timeout on cleanup

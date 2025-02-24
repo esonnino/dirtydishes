@@ -200,12 +200,22 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className, onOpenAiPane
 
     // Update selected text when selection changes
     const text = selection.toString();
-    if (text) {
-      setSelectedText(text);
+    if (text && text.trim()) {
+      setSelectedText(text.trim());
     }
 
+    // This will also notify the AIPanel about the selection
+    if (text && text.trim() && isAiPanelOpen) {
+      onTextSelect(text.trim());
+    }
+
+    // Get the position of the selection
     const range = selection.getRangeAt(0);
     const rect = range.getBoundingClientRect();
+
+    // Position the toolbar above the selection
+    const editorRect = editorRef.current.getBoundingClientRect();
+    const toolbarRect = toolbarRef.current.getBoundingClientRect();
 
     // Calculate position relative to the viewport
     const x = rect.left;
@@ -213,7 +223,6 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className, onOpenAiPane
 
     // Position the toolbar
     if (toolbarRef.current) {
-      const toolbarRect = toolbarRef.current.getBoundingClientRect();
       const newX = x;
       const newY = y - toolbarRect.height - 8;
 
