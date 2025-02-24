@@ -60,6 +60,45 @@ interface ProcessedContent {
   changes: FormatChange[];
 }
 
+const MetadataItem = ({ icon: Icon, text }: { icon: any, text: string }) => {
+  const [mounted, setMounted] = useState(false);
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const iconColor = mounted ? token('color.icon.subtle', '#42526E') : '#42526E';
+  
+  return (
+    <div className="flex items-center gap-1 text-[13px] text-[#42526E]">
+      <Icon size="small" label="" primaryColor={iconColor} />
+      <span>{text}</span>
+    </div>
+  );
+};
+
+const DocumentMetadata = ({ metadata }: { metadata: any }) => {
+  return (
+    <div className="pb-4 mb-6 border-b border-[#DFE1E6]">
+      <div className="flex items-center gap-2 mb-2">
+        <AuthorAvatar name="VR" />
+        <span className="text-[13px] text-[#42526E]">By {metadata.author.name}</span>
+        <div className="flex items-center gap-4">
+          <MetadataItem icon={PageIcon} text={metadata.readingTime} />
+          <div className="flex items-center gap-1 text-[13px] text-[#42526E]">
+            <span className="text-[#E2B203]">🔒</span>
+            <span>Confidential</span>
+          </div>
+          <div className="flex items-center gap-1 text-[13px] text-[#42526E]">
+            <span className="text-[#36B37E]">✓</span>
+            <span>Approved</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const RichTextEditor = ({ value, onChange, onTextSelect, className, onOpenAiPanel }: EditorProps) => {
   const [isToolbarVisible, setIsToolbarVisible] = useState(false);
   const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
@@ -263,7 +302,12 @@ const RichTextEditor = ({ value, onChange, onTextSelect, className, onOpenAiPane
   };
 
   const isFormatActive = (command: string) => {
+    if (typeof document === 'undefined') return false;
+    try {
     return document.queryCommandState(command);
+    } catch (e) {
+      return false;
+    }
   };
 
   const handleBoldClick = () => execCommand('bold');
@@ -1471,7 +1515,6 @@ Project Alpha represents a shift towards a smarter, more efficient way of workin
                       contentEditable
                       suppressContentEditableWarning
                       onBlur={(e) => {
-                        // Handle title update if needed
                         const newTitle = e.currentTarget.textContent;
                       }}
                       spellCheck={false}
@@ -1481,30 +1524,7 @@ Project Alpha represents a shift towards a smarter, more efficient way of workin
                   </div>
 
                   {/* Document metadata section */}
-                  <div className="pb-4 mb-6 border-b border-[#DFE1E6]">
-                    <div className="flex items-center gap-2 mb-2">
-                        <AuthorAvatar name="VR" />
-                      <span className="text-[13px] text-[#42526E]">By {metadata.author.name}</span>
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 text-[13px] text-[#42526E]">
-                          <span className="text-[#E2B203]">🔒</span>
-                          <span>Confidential</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-[13px] text-[#42526E]">
-                          <span className="text-[#36B37E]">✓</span>
-                          <span>Approved</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-[13px] text-[#42526E]">
-                          <PageIcon size="small" label="" primaryColor={token('color.icon.subtle', '#42526E')} />
-                          <span>{metadata.readingTime}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-[13px] text-[#42526E]">
-                          <span>❤️ 🚀</span>
-                          <span>{metadata.reactions}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <DocumentMetadata metadata={metadata} />
 
                   <div className="flex flex-col items-center w-full">
                     <div className="max-w-[960px] w-full">
