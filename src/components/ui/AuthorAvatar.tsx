@@ -19,8 +19,15 @@ export function AuthorAvatar({ name }: AuthorAvatarProps) {
     setMounted(true);
   }, []);
 
+  // Return a placeholder during SSR and initial mount
   if (!mounted) {
-    return <div className="w-6 h-6" />;
+    return (
+      <div 
+        className="w-6 h-6 rounded-full"
+        style={{ backgroundColor: '#FF5630' }}
+        aria-hidden="true"
+      />
+    );
   }
 
   return (

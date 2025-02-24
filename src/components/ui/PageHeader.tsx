@@ -9,10 +9,10 @@ import LinkIcon from '@atlaskit/icon/glyph/link';
 import MoreIcon from '@atlaskit/icon/glyph/more';
 import WatchIcon from '@atlaskit/icon/glyph/watch';
 import PageIcon from '@atlaskit/icon/glyph/page';
-import AvatarGroup from '@atlaskit/avatar-group';
 import Link from 'next/link';
 import Toggle from '@atlaskit/toggle';
 import DropdownMenu, { DropdownItem, DropdownItemGroup } from '@atlaskit/dropdown-menu';
+import { HeaderAvatarGroup } from './HeaderAvatarGroup';
 
 interface PageHeaderProps {
   title: string;
@@ -78,11 +78,7 @@ export function PageHeader({
         </div>
         <div className="flex items-center space-x-4">
           <div className="flex items-center text-sm text-[#42526E]">
-            <AvatarGroup
-              appearance="stack"
-              size="small"
-              data={avatarUsers}
-            />
+            <HeaderAvatarGroup users={avatarUsers} />
             <span>2</span>
           </div>
           <div className="flex items-center space-x-2">
