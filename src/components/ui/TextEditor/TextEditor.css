@@ -8,10 +8,10 @@
   width: 100%;
   min-height: 150px;
   line-height: 1.5;
-  padding: 1rem;
-  border: 1px solid #e2e8f0;
+  padding: 1rem 1rem 1rem 0;
   border-radius: 0.375rem;
   transition: border-color 0.15s ease-in-out;
+  background-color: transparent;
 }
 
 /* REBUILT: Icon morphing animation with simplified structure */
@@ -47,6 +47,18 @@
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
+/* Hide plus button affordance when dropdown is visible */
+.text-editor-container.dropdown-visible .plus-button {
+  background-color: transparent;
+  box-shadow: none;
+}
+
+/* Disable hover effect when dropdown is visible */
+.text-editor-container.dropdown-visible .plus-button:hover {
+  background-color: transparent;
+}
+
+/* Only apply the hover effect when dropdown is not visible */
 .plus-button:hover {
   background-color: #e5e7eb;
 }
@@ -124,8 +136,8 @@
 
 /* Rest of your existing styles */
 .text-editor:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: transparent;
+  box-shadow: none;
 }
 
 /* Empty element styling */
@@ -268,6 +280,11 @@
   animation: pulse 2s infinite;
 }
 
+/* Stop animation when dropdown is visible */
+.text-editor-container.dropdown-visible .plus-button {
+  animation: none !important;
+}
+
 /* Rest of your existing styles - dropdown, heading, etc */
 /* Dropdown styles */
 .dropdown {
@@ -285,6 +302,14 @@
   margin-top: 0px;
   animation: dropdownAppear 0.15s ease-out;
   transform-origin: top left;
+}
+
+/* Ensure no hover effects are visible for the plus button when dropdown is visible */
+.text-editor-container.dropdown-visible .plus-button,
+.text-editor-container.dropdown-visible:hover .plus-button {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  animation: none !important;
 }
 
 @keyframes dropdownAppear {
@@ -401,10 +426,58 @@
   font-weight: bold;
 }
 
-/* Show the plus button when hovering over the editor container */
-.text-editor-container:hover .plus-button {
-  opacity: 1;
-  animation: pulse 2s infinite;
+/* NEW: Override rules for when AI mode is active anywhere in the editor */
+.text-editor-container:has([data-ai-mode="active"]) .plus-button {
+  display: none !important;
+}
+
+/* NEW: Only show the button on the active AI line */
+.text-editor-container:has([data-ai-mode="active"]) [data-ai-mode="active"] .plus-button {
+  display: flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  z-index: 10 !important;
+}
+
+/* NEW: Override all other styling when AI mode is active to prevent any hover or animation effects */
+.text-editor-container:has([data-ai-mode="active"]) .icon-morph-container {
+  pointer-events: none !important;
+}
+
+/* NEW: But allow pointer events on the active AI line */
+.text-editor-container:has([data-ai-mode="active"]) [data-ai-mode="active"] .icon-morph-container {
+  pointer-events: auto !important;
+}
+
+/* NEW: Hide the plus button on non-AI lines when any line has AI mode active */
+.text-editor-container:has([data-ai-mode="active"]) [data-ai-mode="inactive"] .plus-button {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  animation: none !important;
+  display: none !important;
+}
+
+/* NEW: Keep the sparkle icon visible and fixed only on the active AI line */
+.text-editor-container:has([data-ai-mode="active"]) [data-ai-mode="active"] .sparkle-icon {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  position: absolute !important;
+  right: 12px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  pointer-events: auto !important;
+  transition: none !important; /* Disable all transitions to prevent any animation */
+}
+
+/* NEW: Force the sparkle icon to be completely hidden on inactive lines */
+.text-editor-container:has([data-ai-mode="active"]) [data-ai-mode="inactive"] .sparkle-icon {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 /* AI prompt container styles */
@@ -657,4 +730,9 @@
 .ai-prompt-container.accepted .ai-prompt-content h3,
 .ai-prompt-container.accepted .ai-prompt-content h4 {
   color: inherit;
+}
+
+/* Important: Prevent position from being overridden by hover effects */
+.text-editor-container:has([data-ai-mode="active"]) .plus-button {
+  transition: none !important; /* Disable position transitions completely */
 } 

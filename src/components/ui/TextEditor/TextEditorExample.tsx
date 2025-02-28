@@ -397,7 +397,7 @@ function example() {
           placeholder="Start typing or use the + button to insert content..."
           emptyLinePlaceholder="Press the + button or type / to insert"
           insertionOptions={insertionOptions}
-          className="min-h-[300px] shadow-sm"
+          className="min-h-[300px]"
         />
       </div>
       

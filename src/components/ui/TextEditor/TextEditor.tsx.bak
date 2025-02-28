@@ -98,16 +98,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         line.setAttribute('data-ai-prompt', 'true');
         line.className = newState === 'typing' ? 'ai-prompt-line typing' : 'ai-prompt-line';
         line.setAttribute('data-placeholder', 'Ask Rovo what to do...');
-        
-        // Calculate and update the button position to match the active line
-        if (editorRef.current) {
-          const rect = line.getBoundingClientRect();
-          const editorRect = editorRef.current.getBoundingClientRect();
-          setPlusButtonPosition({
-            top: rect.top - editorRect.top + rect.height / 2 - 10
-          });
-          debugLog('Updated button position for AI mode', {top: rect.top - editorRect.top + rect.height / 2 - 10});
-        }
       }
     } else {
       // Clean up previous AI line if it exists
@@ -1533,7 +1523,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
     // If AI mode is active, don't reposition buttons based on hover
     // This ensures the sparkle icon stays fixed on the line with AI mode active
     if (aiModeState === 'active' || aiModeState === 'typing') {
-      // When AI mode is active, we completely ignore mouse movement for button positioning
       return;
     }
     
@@ -1816,46 +1805,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
       updateButtonState(aiModeActive);
     });
   }, [aiModeActive]);
-
-  // NEW: Keep the button position in sync with the AI mode line
-  useEffect(() => {
-    if (aiModeLine && editorRef.current && (aiModeState === 'active' || aiModeState === 'typing')) {
-      // Use requestAnimationFrame to update position smoothly and avoid layout thrashing
-      const updatePosition = () => {
-        const rect = aiModeLine.getBoundingClientRect();
-        const editorRect = editorRef.current!.getBoundingClientRect();
-        setPlusButtonPosition({
-          top: rect.top - editorRect.top + rect.height / 2 - 10
-        });
-      };
-      
-      // Update position on initial render
-      updatePosition();
-      
-      // Set up a ResizeObserver to watch for size changes in the editor or the line
-      const resizeObserver = new ResizeObserver(() => {
-        updatePosition();
-      });
-      
-      resizeObserver.observe(editorRef.current);
-      if (aiModeLine) {
-        resizeObserver.observe(aiModeLine);
-      }
-      
-      // Add scroll listener to update position on scroll
-      const scrollHandler = () => {
-        updatePosition();
-      };
-      
-      window.addEventListener('scroll', scrollHandler, {passive: true});
-      
-      // Clean up
-      return () => {
-        resizeObserver.disconnect();
-        window.removeEventListener('scroll', scrollHandler);
-      };
-    }
-  }, [aiModeLine, aiModeState]);
 
   // Clean up all timers on unmount
   useEffect(() => {

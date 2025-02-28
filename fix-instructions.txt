@@ -1,0 +1,1 @@
+Fix for AI mode issues can be found in the updated files. Check TextEditor.tsx for the handleKeyDown fixes and updated wrapper class.
