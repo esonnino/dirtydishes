@@ -210,18 +210,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({
           promptContent.setAttribute('contenteditable', 'true');
           promptContent.innerHTML = filterText;
           
-          const iconDiv = document.createElement('div');
-          iconDiv.className = 'ai-prompt-icon';
-          iconDiv.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#3b82f6" width="16" height="16">
-              <path d="M12 1L9.5 8.5L2 11L9.5 13.5L12 21L14.5 13.5L22 11L14.5 8.5L12 1Z" />
-              <path d="M5 14.5L4 19L7 17L10 19L8.5 14.5" opacity="0.5" />
-              <path d="M19 14.5L20 19L17 17L14 19L15.5 14.5" opacity="0.5" />
-            </svg>
-          `;
-          
           promptContainer.appendChild(promptContent);
-          promptContainer.appendChild(iconDiv);
           
           if (line.nextSibling) {
             editor.insertBefore(promptContainer, line.nextSibling);
@@ -764,6 +753,36 @@ export const TextEditor: React.FC<TextEditorProps> = ({
     if (e.key === 'Backspace') {
       debugLog('Backspace pressed', e);
       
+      // Early interception for AI mode with empty lines
+      if (aiModeActive && aiModeLine) {
+        // Get current selection
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return;
+        
+        // Check if we're about to delete the entire line
+        if (isLineEmpty(aiModeLine) || aiModeLine.textContent?.trim().length === 0 || aiModeLine.innerHTML === '<br>') {
+          debugLog('EARLY INTERCEPT: Preventing deletion of empty AI line');
+          
+          // Prevent the default action to ensure the line doesn't get deleted
+          e.preventDefault();
+          
+          // Exit AI mode but keep the line
+          updateAiMode('inactive');
+          
+          // Make sure the line stays by setting it to contain a <br>
+          aiModeLine.innerHTML = '<br>';
+          
+          // Set cursor position at the beginning of the line
+          const newRange = document.createRange();
+          newRange.setStart(aiModeLine, 0);
+          newRange.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+          
+          return;
+        }
+      }
+      
       // Track timing for double backspace detection
       const now = Date.now();
       const isDoubleBackspace = (now - lastBackspaceTime.current) < 300;
@@ -795,32 +814,35 @@ export const TextEditor: React.FC<TextEditorProps> = ({
             const currentContent = aiPromptLine.textContent || '';
             const isAtBeginning = caretAt === 0;
             const isEmptyOrNearlyEmpty = isLineEmpty(aiPromptLine) || currentContent.trim().length <= 1;
+            const wouldBecomeEmpty = currentContent.length === 1 || 
+                                    (caretAt === 1 && currentContent.length === 1) ||
+                                    (currentContent.trim().length <= 1);
             
             debugLog('Backspace evaluation', {
               content: currentContent,
+              contentLength: currentContent.length,
               caretAt,
               isAtBeginning,
               isEmptyOrNearlyEmpty,
+              wouldBecomeEmpty,
               innerHTML: aiPromptLine.innerHTML,
               isDoubleBackspace
             });
             
-            // Exit conditions: empty line, at beginning, double backspace
-            if (isEmptyOrNearlyEmpty || isAtBeginning || isDoubleBackspace) {
+            // Exit conditions: empty line, at beginning, last character, or double backspace
+            if (isEmptyOrNearlyEmpty || isAtBeginning || wouldBecomeEmpty || isDoubleBackspace) {
               debugLog('Conditions met for exiting AI mode');
               
-              // Prevent default action in special cases
-              if (isAtBeginning || isDoubleBackspace) {
-                e.preventDefault();
-              }
+              // Prevent default to ensure line doesn't get deleted
+              e.preventDefault();
               
-              // Force the line to be empty - more consistent than letting browser handle it
+              // Force the line to be empty but maintain its existence
               aiPromptLine.innerHTML = '<br>';
               
               // Exit AI mode
               updateAiMode('inactive');
               
-              // Set cursor position
+              // Set cursor position at the beginning of the current line
               const newRange = document.createRange();
               newRange.setStart(aiPromptLine, 0);
               newRange.collapse(true);
@@ -950,29 +972,21 @@ export const TextEditor: React.FC<TextEditorProps> = ({
             promptContent.className = 'ai-prompt-content';
             promptContent.setAttribute('contenteditable', 'false');
             
-            const iconDiv = document.createElement('div');
-            iconDiv.className = 'ai-prompt-icon';
-            iconDiv.innerHTML = `
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#3b82f6" width="16" height="16">
-                <path d="M12 1L9.5 8.5L2 11L9.5 13.5L12 21L14.5 13.5L22 11L14.5 8.5L12 1Z" />
-                <path d="M5 14.5L4 19L7 17L10 19L8.5 14.5" opacity="0.5" />
-                <path d="M19 14.5L20 19L17 17L14 19L15.5 14.5" opacity="0.5" />
-              </svg>
-            `;
-            
             aiModeLine.innerHTML = '';
             aiModeLine.removeAttribute('data-ai-prompt');
             aiModeLine.className = '';
             aiModeLine.appendChild(promptContainer);
             
             promptContainer.appendChild(promptContent);
-            promptContainer.appendChild(iconDiv);
             
             // Add loading state
             promptContent.innerHTML = `
               <div class="ai-loading-state">
-                <div class="ai-loading-spinner"></div>
-                <em>Generating response with OpenAI...</em>
+                <div class="ai-loading-bubble">
+                  <span class="ai-loading-dot"></span>
+                  <span class="ai-loading-dot"></span>
+                  <span class="ai-loading-dot"></span>
+                </div>
               </div>
             `;
             
@@ -980,9 +994,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
             const generateAIResponse = async () => {
               try {
                 debugLog('Sending prompt to OpenAI API endpoint:', fullPrompt);
-                
-                // First, add the growing class to the container for animation
-                promptContainer.classList.add('growing');
                 
                 const response = await fetch('/api/ai-prompt', {
                   method: 'POST',
@@ -997,6 +1008,18 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                 }
                 
                 const data = await response.json();
+                
+                // First add the class to start fading out the loader
+                promptContainer.classList.add('loader-fading');
+                
+                // Wait for the loader to fade out completely
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                // Now add the growing class to initiate container expansion
+                promptContainer.classList.add('growing');
+                
+                // Small delay before showing content
+                await new Promise(resolve => setTimeout(resolve, 200));
                 
                 // Display the response with word-by-word animation
                 const responseHtml = data.text || `<p>Error: Failed to generate a response.</p>`;
@@ -1018,26 +1041,95 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                   // Remove buttons
                   buttonsContainer.remove();
                   
-                  // Apply the accepted class to make it look like regular text
-                  promptContainer.classList.add('accepted');
+                  // Get all the content from the AI response
+                  const responseContent = promptContent.innerHTML;
                   
-                  // Create a new paragraph after the response
-                  const newP = document.createElement('p');
+                  // Create a temporary div to parse the response
+                  const tempDiv = document.createElement('div');
+                  tempDiv.innerHTML = responseContent;
                   
-                  if (aiModeLine.nextSibling) {
-                    editorRef.current?.insertBefore(newP, aiModeLine.nextSibling);
+                  // Remove any animation classes or spans that might prevent editing
+                  const wordAnimationSpans = tempDiv.querySelectorAll('.ai-word-animation');
+                  wordAnimationSpans.forEach(span => {
+                    const parent = span.parentNode;
+                    if (parent) {
+                      parent.insertBefore(document.createTextNode(span.textContent || ''), span);
+                      parent.removeChild(span);
+                    }
+                  });
+                  
+                  // Clean up any remaining animation classes
+                  const animatedElements = tempDiv.querySelectorAll('.ai-animated-text, [style*="animation"]');
+                  animatedElements.forEach(el => {
+                    if (el instanceof HTMLElement) {
+                      el.classList.remove('ai-animated-text');
+                      el.style.animation = '';
+                      el.style.opacity = '1';
+                    }
+                  });
+                  
+                  // Get paragraphs from the response
+                  const paragraphs = tempDiv.querySelectorAll('p');
+                  
+                  // Replace the current AI line with the first paragraph
+                  // or create a new one if there are no paragraphs
+                  if (paragraphs.length > 0) {
+                    const firstParagraph = document.createElement('p');
+                    firstParagraph.innerHTML = paragraphs[0].innerHTML;
+                    firstParagraph.setAttribute('contenteditable', 'true');
+                    
+                    // Replace the entire AI container with the first paragraph
+                    if (aiModeLine) {
+                      if (aiModeLine.parentNode) {
+                        aiModeLine.parentNode.replaceChild(firstParagraph, aiModeLine);
+                      }
+                    }
+                    
+                    // Insert the rest of the paragraphs
+                    let lastInsertedElement = firstParagraph;
+                    for (let i = 1; i < paragraphs.length; i++) {
+                      const newP = document.createElement('p');
+                      newP.innerHTML = paragraphs[i].innerHTML;
+                      newP.setAttribute('contenteditable', 'true');
+                      
+                      if (lastInsertedElement.nextSibling) {
+                        editorRef.current?.insertBefore(newP, lastInsertedElement.nextSibling);
+                      } else {
+                        editorRef.current?.appendChild(newP);
+                      }
+                      lastInsertedElement = newP;
+                    }
+                    
+                    // Set focus to the last paragraph
+                    const selection = window.getSelection();
+                    if (selection) {
+                      const newRange = document.createRange();
+                      newRange.selectNodeContents(lastInsertedElement);
+                      newRange.collapse(false);
+                      selection.removeAllRanges();
+                      selection.addRange(newRange);
+                    }
                   } else {
-                    editorRef.current?.appendChild(newP);
-                  }
-                  
-                  // Set focus to the new paragraph
-                  const selection = window.getSelection();
-                  if (selection) {
-                    const newRange = document.createRange();
-                    newRange.selectNodeContents(newP);
-                    newRange.collapse(true);
-                    selection.removeAllRanges();
-                    selection.addRange(newRange);
+                    // Handle case where there are no paragraphs
+                    const newP = document.createElement('p');
+                    newP.innerHTML = tempDiv.innerHTML;
+                    newP.setAttribute('contenteditable', 'true');
+                    
+                    if (aiModeLine) {
+                      if (aiModeLine.parentNode) {
+                        aiModeLine.parentNode.replaceChild(newP, aiModeLine);
+                      }
+                    }
+                    
+                    // Set focus to the new paragraph
+                    const selection = window.getSelection();
+                    if (selection) {
+                      const newRange = document.createRange();
+                      newRange.selectNodeContents(newP);
+                      newRange.collapse(false);
+                      selection.removeAllRanges();
+                      selection.addRange(newRange);
+                    }
                   }
                   
                   // Update editor value
@@ -1099,8 +1191,17 @@ export const TextEditor: React.FC<TextEditorProps> = ({
               } catch (error) {
                 console.error('Error generating AI response:', error);
                 
-                // Make sure the container grows even for error messages
+                // First add the class to start fading out the loader
+                promptContainer.classList.add('loader-fading');
+                
+                // Wait for the loader to fade out completely
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                // Now add the growing class to initiate container expansion
                 promptContainer.classList.add('growing');
+                
+                // Small delay before showing content
+                await new Promise(resolve => setTimeout(resolve, 200));
                 
                 const errorHtml = `
                   <div>
@@ -1230,29 +1331,21 @@ export const TextEditor: React.FC<TextEditorProps> = ({
               promptContent.className = 'ai-prompt-content';
               promptContent.setAttribute('contenteditable', 'false');
               
-              const iconDiv = document.createElement('div');
-              iconDiv.className = 'ai-prompt-icon';
-              iconDiv.innerHTML = `
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#3b82f6" width="16" height="16">
-                  <path d="M12 1L9.5 8.5L2 11L9.5 13.5L12 21L14.5 13.5L22 11L14.5 8.5L12 1Z" />
-                  <path d="M5 14.5L4 19L7 17L10 19L8.5 14.5" opacity="0.5" />
-                  <path d="M19 14.5L20 19L17 17L14 19L15.5 14.5" opacity="0.5" />
-                </svg>
-              `;
-              
               aiPromptLine.innerHTML = '';
               aiPromptLine.removeAttribute('data-ai-prompt');
               aiPromptLine.className = '';
               aiPromptLine.appendChild(promptContainer);
               
               promptContainer.appendChild(promptContent);
-              promptContainer.appendChild(iconDiv);
               
               // Add loading state
               promptContent.innerHTML = `
                 <div class="ai-loading-state">
-                  <div class="ai-loading-spinner"></div>
-                  <em>Generating response with OpenAI...</em>
+                  <div class="ai-loading-bubble">
+                    <span class="ai-loading-dot"></span>
+                    <span class="ai-loading-dot"></span>
+                    <span class="ai-loading-dot"></span>
+                  </div>
                 </div>
               `;
               
@@ -1260,9 +1353,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
               const generateAIResponse = async () => {
                 try {
                   debugLog('Sending prompt to OpenAI API endpoint:', fullPrompt);
-                  
-                  // First, add the growing class to the container for animation
-                  promptContainer.classList.add('growing');
                   
                   const response = await fetch('/api/ai-prompt', {
                     method: 'POST',
@@ -1277,6 +1367,18 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                   }
                   
                   const data = await response.json();
+                  
+                  // First add the class to start fading out the loader
+                  promptContainer.classList.add('loader-fading');
+                  
+                  // Wait for the loader to fade out completely
+                  await new Promise(resolve => setTimeout(resolve, 300));
+                  
+                  // Now add the growing class to initiate container expansion
+                  promptContainer.classList.add('growing');
+                  
+                  // Small delay before showing content
+                  await new Promise(resolve => setTimeout(resolve, 200));
                   
                   // Display the response with word-by-word animation
                   const responseHtml = data.text || `<p>Error: Failed to generate a response.</p>`;
@@ -1298,26 +1400,95 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                     // Remove buttons
                     buttonsContainer.remove();
                     
-                    // Apply the accepted class to make it look like regular text
-                    promptContainer.classList.add('accepted');
+                    // Get all the content from the AI response
+                    const responseContent = promptContent.innerHTML;
                     
-                    // Create a new paragraph after the response
-                    const newP = document.createElement('p');
+                    // Create a temporary div to parse the response
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = responseContent;
                     
-                    if (aiPromptLine.nextSibling) {
-                      editorRef.current?.insertBefore(newP, aiPromptLine.nextSibling);
+                    // Remove any animation classes or spans that might prevent editing
+                    const wordAnimationSpans = tempDiv.querySelectorAll('.ai-word-animation');
+                    wordAnimationSpans.forEach(span => {
+                      const parent = span.parentNode;
+                      if (parent) {
+                        parent.insertBefore(document.createTextNode(span.textContent || ''), span);
+                        parent.removeChild(span);
+                      }
+                    });
+                    
+                    // Clean up any remaining animation classes
+                    const animatedElements = tempDiv.querySelectorAll('.ai-animated-text, [style*="animation"]');
+                    animatedElements.forEach(el => {
+                      if (el instanceof HTMLElement) {
+                        el.classList.remove('ai-animated-text');
+                        el.style.animation = '';
+                        el.style.opacity = '1';
+                      }
+                    });
+                    
+                    // Get paragraphs from the response
+                    const paragraphs = tempDiv.querySelectorAll('p');
+                    
+                    // Replace the current AI line with the first paragraph
+                    // or create a new one if there are no paragraphs
+                    if (paragraphs.length > 0) {
+                      const firstParagraph = document.createElement('p');
+                      firstParagraph.innerHTML = paragraphs[0].innerHTML;
+                      firstParagraph.setAttribute('contenteditable', 'true');
+                      
+                      // Replace the entire AI container with the first paragraph
+                      if (aiPromptLine) {
+                        if (aiPromptLine.parentNode) {
+                          aiPromptLine.parentNode.replaceChild(firstParagraph, aiPromptLine);
+                        }
+                      }
+                      
+                      // Insert the rest of the paragraphs
+                      let lastInsertedElement = firstParagraph;
+                      for (let i = 1; i < paragraphs.length; i++) {
+                        const newP = document.createElement('p');
+                        newP.innerHTML = paragraphs[i].innerHTML;
+                        newP.setAttribute('contenteditable', 'true');
+                        
+                        if (lastInsertedElement.nextSibling) {
+                          editorRef.current?.insertBefore(newP, lastInsertedElement.nextSibling);
+                        } else {
+                          editorRef.current?.appendChild(newP);
+                        }
+                        lastInsertedElement = newP;
+                      }
+                      
+                      // Set focus to the last paragraph
+                      const selection = window.getSelection();
+                      if (selection) {
+                        const newRange = document.createRange();
+                        newRange.selectNodeContents(lastInsertedElement);
+                        newRange.collapse(false);
+                        selection.removeAllRanges();
+                        selection.addRange(newRange);
+                      }
                     } else {
-                      editorRef.current?.appendChild(newP);
-                    }
-                    
-                    // Set focus to the new paragraph
-                    const selection = window.getSelection();
-                    if (selection) {
-                      const newRange = document.createRange();
-                      newRange.selectNodeContents(newP);
-                      newRange.collapse(true);
-                      selection.removeAllRanges();
-                      selection.addRange(newRange);
+                      // Handle case where there are no paragraphs
+                      const newP = document.createElement('p');
+                      newP.innerHTML = tempDiv.innerHTML;
+                      newP.setAttribute('contenteditable', 'true');
+                      
+                      if (aiPromptLine) {
+                        if (aiPromptLine.parentNode) {
+                          aiPromptLine.parentNode.replaceChild(newP, aiPromptLine);
+                        }
+                      }
+                      
+                      // Set focus to the new paragraph
+                      const selection = window.getSelection();
+                      if (selection) {
+                        const newRange = document.createRange();
+                        newRange.selectNodeContents(newP);
+                        newRange.collapse(false);
+                        selection.removeAllRanges();
+                        selection.addRange(newRange);
+                      }
                     }
                     
                     // Update editor value
@@ -1379,8 +1550,17 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                 } catch (error) {
                   console.error('Error generating AI response:', error);
                   
-                  // Make sure the container grows even for error messages
+                  // First add the class to start fading out the loader
+                  promptContainer.classList.add('loader-fading');
+                  
+                  // Wait for the loader to fade out completely
+                  await new Promise(resolve => setTimeout(resolve, 300));
+                  
+                  // Now add the growing class to initiate container expansion
                   promptContainer.classList.add('growing');
+                  
+                  // Small delay before showing content
+                  await new Promise(resolve => setTimeout(resolve, 200));
                   
                   const errorHtml = `
                     <div>
@@ -1464,6 +1644,13 @@ export const TextEditor: React.FC<TextEditorProps> = ({
     if (aiModeActive || aiModeLine) return;
     
     if (!hoverLine || !editorRef.current) return;
+    
+    // Check if line has an AI prompt container or loading state
+    const hasPromptContainer = hoverLine.querySelector('.ai-prompt-container') !== null;
+    const hasLoadingState = hoverLine.querySelector('.ai-loading-state') !== null;
+    
+    // Don't show dropdown if line has AI prompt container or loading state
+    if (hasPromptContainer || hasLoadingState) return;
     
     setActiveLine(hoverLine);
     
@@ -1565,6 +1752,13 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         top: rect.top - editorRect.top + rect.height / 2 - 10
       });
       
+      // Check if line has an AI prompt container or loading state
+      const hasPromptContainer = lineElement.querySelector('.ai-prompt-container') !== null;
+      const hasLoadingState = lineElement.querySelector('.ai-loading-state') !== null;
+      
+      // Only show the plus button if the line doesn't have an AI prompt container or loading state
+      const shouldShowPlusButton = !hasPromptContainer && !hasLoadingState;
+      
       // Check if we're currently in AI mode
       if (aiModeActive) {
         // If we're in AI mode, don't exit it when just moving the mouse
@@ -1587,7 +1781,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         // If it's not an AI line, we stay in inactive mode
       }
       
-      setShowPlusButton(true);
+      setShowPlusButton(shouldShowPlusButton);
     }
   };
 
@@ -1925,6 +2119,224 @@ export const TextEditor: React.FC<TextEditorProps> = ({
     
     return tempDiv.outerHTML;
   };
+
+  // Add styles for the new chat-like loading state
+  useEffect(() => {
+    // Add a style tag for the loading bubble if it doesn't exist
+    if (!document.getElementById('ai-loading-bubble-style')) {
+      const style = document.createElement('style');
+      style.id = 'ai-loading-bubble-style';
+      style.innerHTML = `
+        .ai-prompt-container {
+          display: flex;
+          align-items: flex-start;
+          border-left: none;
+          padding: 9px;
+          margin: -9px 0 0 -9px;
+          transition: all 0.4s ease-out;
+          overflow: hidden;
+          background-color: #f0f4f9;
+          border-radius: 6px;
+          width: fit-content;
+          max-width: 180px;
+          box-sizing: border-box;
+          transform-origin: left center;
+        }
+        
+        /* Explicitly prevent background color change on hover, but maintain other styles */
+        .ai-prompt-container:hover {
+          background-color: #f0f4f9 !important;
+        }
+        
+        .ai-prompt-content {
+          flex: 1;
+          padding-right: 8px;
+          padding-left: 0;
+          border-left: none;
+          margin-left: 0;
+          transition: all 0.4s ease-out;
+          width: 100%;
+          overflow: hidden;
+        }
+        
+        .ai-loading-bubble {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          background-color: transparent;
+          border-radius: 6px;
+          padding: 3px 6px;
+          margin: 0;
+          width: auto;
+          height: 16px;
+          border-left: none;
+          box-shadow: none;
+          opacity: 1;
+          transition: opacity 0.3s ease-out;
+        }
+        
+        /* Prevent loading bubble background change on hover, without affecting animations */
+        .ai-loading-bubble:hover {
+          background-color: transparent !important;
+        }
+        
+        .ai-loading-state {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: auto;
+          border-left: none;
+          padding-left: 0;
+          margin-left: 0;
+          transition: opacity 0.3s ease-out;
+          min-height: 22px;
+        }
+        
+        /* Fix for loader fading - this ensures the loader dots fade out completely */
+        .ai-prompt-container.loader-fading .ai-loading-state,
+        .ai-prompt-container.loader-fading .ai-loading-bubble,
+        .ai-prompt-container.loader-fading .ai-loading-dot {
+          opacity: 0;
+        }
+        
+        .ai-prompt-container.growing {
+          animation: container-grow 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+          width: auto;
+          min-width: 100px;
+        }
+        
+        /* Prevent background changes on hover for the growing container */
+        .ai-prompt-container.growing:hover {
+          background-color: #f0f4f9 !important;
+        }
+        
+        /* Better approach to prevent background changes on hover for specific elements
+           without disrupting animations */
+        .ai-prompt-container:hover p,
+        .ai-prompt-container:hover div:not(.ai-loading-bubble):not(.ai-loading-state),
+        .ai-prompt-container:hover span:not(.ai-loading-dot),
+        .ai-prompt-container.growing:hover p,
+        .ai-prompt-container.growing:hover div:not(.ai-loading-bubble):not(.ai-loading-state),
+        .ai-prompt-container.growing:hover span:not(.ai-loading-dot) {
+          background-color: transparent !important;
+        }
+        
+        .ai-animated-text {
+          opacity: 0;
+          animation: fade-in 0.5s ease-out 0.2s forwards;
+          transition: opacity 0.5s ease-out;
+        }
+        
+        .ai-word-animation {
+          opacity: 0;
+          animation: word-appear 0.4s ease-out forwards;
+          display: inline-block;
+          transform-origin: bottom left;
+        }
+        
+        /* Improved styles for all text elements within the AI response */
+        .ai-prompt-content p, 
+        .ai-prompt-content div,
+        .ai-prompt-content span,
+        .ai-prompt-content strong {
+          opacity: 0;
+          animation: fade-in 0.5s ease-out forwards;
+        }
+        
+        /* Apply sequential fade-in to paragraphs */
+        .ai-prompt-content p:nth-child(1) { animation-delay: 0.3s; }
+        .ai-prompt-content p:nth-child(2) { animation-delay: 0.5s; }
+        .ai-prompt-content p:nth-child(3) { animation-delay: 0.7s; }
+        .ai-prompt-content p:nth-child(4) { animation-delay: 0.9s; }
+        .ai-prompt-content p:nth-child(n+5) { animation-delay: 1.1s; }
+        
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        
+        @keyframes word-appear {
+          from { 
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to { 
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        /* Animation configuration that creates a smoother width/height transition */
+        @keyframes container-grow {
+          0% {
+            max-height: 30px;
+            width: 180px;
+            max-width: 180px;
+            opacity: 0.9;
+          }
+          10% {
+            max-height: 55px;
+            width: 200px;
+            max-width: 200px;
+          }
+          30% {
+            max-height: 150px;
+            width: 400px;
+            max-width: 400px;
+          }
+          60% {
+            max-height: 300px;
+            width: 70%;
+            max-width: 70%;
+          }
+          100% {
+            max-height: 1000px;
+            width: 100%;
+            max-width: 100%;
+            opacity: 1;
+          }
+        }
+        
+        .ai-loading-dot {
+          display: inline-block;
+          width: 5px;
+          height: 5px;
+          background-color: #3b82f6;
+          border-radius: 50%;
+          margin: 0 2px;
+          opacity: 0.6;
+          animation: ai-loading-dot-animation 1.4s infinite ease-in-out both;
+        }
+        
+        .ai-loading-dot:nth-child(1) {
+          animation-delay: -0.32s;
+        }
+        
+        .ai-loading-dot:nth-child(2) {
+          animation-delay: -0.16s;
+        }
+        
+        @keyframes ai-loading-dot-animation {
+          0%, 80%, 100% { 
+            transform: scale(0.6);
+          }
+          40% { 
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+        
+        /* Hide plus button on lines with AI prompt container or loading state */
+        *:has(.ai-prompt-container) .plus-button,
+        *:has(.ai-loading-state) .plus-button {
+          display: none !important;
+          visibility: hidden !important;
+          pointer-events: none !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }, []);
 
   return (
     <div ref={editorWrapperRef} className={`relative text-editor-container ${showDropdown ? 'dropdown-visible' : ''}`}>
