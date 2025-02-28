@@ -207,7 +207,9 @@
   pointer-events: none;
   opacity: 0.75;
   font-weight: normal; /* Normal weight for placeholder */
+  font-style: normal;
 }
+
 
 /* Show AI placeholder when content is just a <br> element */
 .text-editor [data-ai-prompt][data-placeholder]:has(br:only-child)::before {
@@ -220,7 +222,7 @@
 .text-editor .ai-prompt-line[data-placeholder]:empty::before,
 .text-editor .ai-prompt-line[data-placeholder]:has(br:only-child)::before {
   font-weight: normal !important;
-  font-style: italic;
+  font-style: normal;
 }
 
 /* IMPROVED: More reliable sparkle animation for AI prompt line */

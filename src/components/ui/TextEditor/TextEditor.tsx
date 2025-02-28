@@ -21,6 +21,7 @@ export interface TextEditorProps {
   onSelect?: (selectedText: string) => void;
   className?: string;
   placeholder?: string;
+  /** @deprecated Use placeholder instead. Kept for backwards compatibility */
   emptyLinePlaceholder?: string;
   insertionOptions?: InsertionOption[];
 }
@@ -30,8 +31,8 @@ export const TextEditor: React.FC<TextEditorProps> = ({
   onChange,
   onSelect,
   className,
-  placeholder = 'Start typing...',
-  emptyLinePlaceholder = 'Press the + button or type / to insert',
+  placeholder = 'Type  / to insert elements, . for AI,',
+  emptyLinePlaceholder = 'Type  / to insert elements, . for AI,',
   insertionOptions = []
 }) => {
   const [value, setValue] = useState(initialValue);
@@ -97,7 +98,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         // Update line DOM
         line.setAttribute('data-ai-prompt', 'true');
         line.className = newState === 'typing' ? 'ai-prompt-line typing' : 'ai-prompt-line';
-        line.setAttribute('data-placeholder', 'Ask Rovo what to do...');
+        line.setAttribute('data-placeholder', 'Write with AI or select from below');
         
         // Calculate and update the button position to match the active line
         if (editorRef.current) {
@@ -114,7 +115,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({
       if (aiModeLine) {
         aiModeLine.removeAttribute('data-ai-prompt');
         aiModeLine.className = '';
-        aiModeLine.setAttribute('data-placeholder', emptyLinePlaceholder);
+        aiModeLine.setAttribute('data-placeholder', placeholder);
       }
       setAiModeLine(null);
     }
@@ -1921,15 +1922,8 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         const isEmpty = p.innerHTML === '' || p.innerHTML === '<br>' || !p.textContent?.trim();
         
         if (isEmpty) {
-          const isFocused = focusedElement === p;
-          
-          if (isFocused) {
-            p.setAttribute('data-placeholder', emptyLinePlaceholder);
-          } else if (index === 0 && paragraphs.length === 1) {
-            p.setAttribute('data-placeholder', placeholder);
-          } else {
-            p.removeAttribute('data-placeholder');
-          }
+          // Use the same placeholder for all empty paragraphs
+          p.setAttribute('data-placeholder', placeholder);
         } else {
           p.removeAttribute('data-placeholder');
         }
@@ -1949,7 +1943,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({
       observer.disconnect();
       document.removeEventListener('selectionchange', handlePlaceholders);
     };
-  }, [emptyLinePlaceholder, placeholder]);
+  }, [placeholder]);
 
   useEffect(() => {
     if (editorRef.current) {
@@ -2332,6 +2326,19 @@ export const TextEditor: React.FC<TextEditorProps> = ({
           display: none !important;
           visibility: hidden !important;
           pointer-events: none !important;
+        }
+        
+        /* Direct override for AI prompt placeholder - using !important to ensure it takes precedence */
+        .text-editor [data-ai-prompt][data-placeholder]:empty::before,
+        .text-editor [data-ai-prompt][data-placeholder]:has(br:only-child)::before,
+        .text-editor .ai-prompt-line[data-placeholder]:empty::before,
+        .text-editor .ai-prompt-line[data-placeholder]:has(br:only-child)::before {
+          content: "Write with AI or select from below" !important;
+          color: #3b82f6 !important;
+          position: absolute !important;
+          pointer-events: none !important;
+          opacity: 0.75 !important;
+          
         }
       `;
       document.head.appendChild(style);

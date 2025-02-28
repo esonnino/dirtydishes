@@ -99,7 +99,7 @@ export const TextEditorExample: React.FC = () => {
         promptContent.className = 'ai-prompt-content';
         promptContent.setAttribute('contenteditable', 'true');
         promptContent.innerHTML = '';
-        promptContent.setAttribute('data-placeholder', 'Ask AI to help you write something...');
+        promptContent.setAttribute('data-placeholder', 'Write with AI or select from below');
         
         // Create the sparkle icon
         const iconDiv = document.createElement('div');
@@ -394,8 +394,8 @@ function example() {
         <TextEditor
           onChange={handleContentChange}
           onSelect={handleTextSelect}
-          placeholder="Start typing or use the + button to insert content..."
-          emptyLinePlaceholder="Press the + button or type / to insert"
+          placeholder="Type  / to insert elements, . for AI,"
+          emptyLinePlaceholder="Type  / to insert elements, . for AI,"
           insertionOptions={insertionOptions}
           className="min-h-[300px]"
         />
