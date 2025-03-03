@@ -98,6 +98,93 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         // Update line DOM
         line.setAttribute('data-ai-prompt', 'true');
         line.className = newState === 'typing' ? 'ai-prompt-line typing' : 'ai-prompt-line';
+        
+        // Add recommendation pills immediately when entering AI mode
+        if (newState === 'active') {
+          // Clean up any existing recommendation pills first
+          document.querySelector('.ai-recommendation-pills.initial')?.remove();
+          
+          // Add recommendation pills container
+          const recommendationContainer = document.createElement('div');
+          recommendationContainer.className = 'ai-recommendation-pills initial';
+          document.querySelector('.text-editor-container')?.appendChild(recommendationContainer);
+          
+          // Add recommendation pills
+          const recommendationPills = [
+            { 
+              text: 'Continue writing', 
+              action: () => {
+                const promptText = line.textContent?.trim() || '';
+                console.log('Continue writing with prompt:', promptText);
+              } 
+            },
+            { 
+              text: 'New section', 
+              action: () => {
+                const promptText = line.textContent?.trim() || '';
+                console.log('Create new section with prompt:', promptText);
+              } 
+            },
+            { 
+              text: 'View related content', 
+              action: () => {
+                const promptText = line.textContent?.trim() || '';
+                console.log('Find related content for:', promptText);
+              } 
+            },
+            { 
+              text: 'More', 
+              action: () => {
+                // Show more options
+                debugLog('Showing more options');
+                
+                // Replace current pills with more options
+                recommendationContainer.innerHTML = '';
+                
+                // Add additional options
+                const morePills = [
+                  { text: 'Summarize', action: () => console.log('Summarizing content...') },
+                  { text: 'Rewrite', action: () => console.log('Rewriting content...') },
+                  { text: 'Explain', action: () => console.log('Explaining content...') },
+                  { 
+                    text: 'Back', 
+                    action: () => {
+                      // Clear current pills
+                      recommendationContainer.innerHTML = '';
+                      
+                      // Recreate the original pills
+                      recommendationPills.forEach(pill => {
+                        const pillButton = document.createElement('button');
+                        pillButton.className = 'ai-recommendation-pill';
+                        pillButton.textContent = pill.text;
+                        pillButton.onclick = pill.action;
+                        recommendationContainer.appendChild(pillButton);
+                      });
+                    } 
+                  }
+                ];
+                
+                morePills.forEach(pill => {
+                  const pillButton = document.createElement('button');
+                  pillButton.className = 'ai-recommendation-pill';
+                  pillButton.textContent = pill.text;
+                  pillButton.onclick = pill.action;
+                  recommendationContainer.appendChild(pillButton);
+                });
+              } 
+            }
+          ];
+          
+          recommendationPills.forEach(pill => {
+            const pillButton = document.createElement('button');
+            pillButton.className = 'ai-recommendation-pill';
+            pillButton.textContent = pill.text;
+            pillButton.onclick = pill.action;
+            recommendationContainer.appendChild(pillButton);
+          });
+        }
+        
+        // Update line DOM
         line.setAttribute('data-placeholder', 'Write with AI or select from below');
         
         // Calculate and update the button position to match the active line
@@ -115,8 +202,15 @@ export const TextEditor: React.FC<TextEditorProps> = ({
       if (aiModeLine) {
         aiModeLine.removeAttribute('data-ai-prompt');
         aiModeLine.className = '';
+        
+        // Remove any recommendation pills that might be visible
+        document.querySelector('.ai-recommendation-pills.initial')?.remove();
+        
+        // Restore the original placeholder
         aiModeLine.setAttribute('data-placeholder', placeholder);
       }
+      
+      // Reset state
       setAiModeLine(null);
     }
     
@@ -921,6 +1015,9 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         e.preventDefault();
         e.stopPropagation();
         
+        // If there are initial recommendation pills, hide them as we're now going to process the prompt
+        document.querySelector('.ai-recommendation-pills.initial')?.remove();
+        
         // If we have active AI line, use it directly instead of searching
         if (aiModeLine) {
           const promptText = aiModeLine.textContent || '';
@@ -991,6 +1088,91 @@ export const TextEditor: React.FC<TextEditorProps> = ({
               </div>
             `;
             
+            // Add recommendation pills container immediately
+            const recommendationContainer = document.createElement('div');
+            recommendationContainer.className = 'ai-recommendation-pills initial';
+            document.querySelector('.text-editor-container')?.appendChild(recommendationContainer);
+            
+            // Add recommendation pills
+            const recommendationPills = [
+              { 
+                text: 'Continue writing', 
+                action: () => {
+                  const currentPrompt = promptText.trim();
+                  if (currentPrompt) {
+                    console.log('Continue writing with prompt:', currentPrompt);
+                  }
+                } 
+              },
+              { 
+                text: 'New section', 
+                action: () => {
+                  const currentPrompt = promptText.trim();
+                  if (currentPrompt) {
+                    console.log('Create new section with prompt:', currentPrompt);
+                  }
+                } 
+              },
+              { 
+                text: 'View related content', 
+                action: () => {
+                  const currentPrompt = promptText.trim();
+                  if (currentPrompt) {
+                    console.log('Find related content for:', currentPrompt);
+                  }
+                } 
+              },
+              { 
+                text: 'More', 
+                action: () => {
+                  // Show more options
+                  debugLog('Showing more options');
+                  
+                  // Replace current pills with more options
+                  recommendationContainer.innerHTML = '';
+                  
+                  // Add additional options
+                  const morePills = [
+                    { text: 'Summarize', action: () => console.log('Summarizing content...') },
+                    { text: 'Rewrite', action: () => console.log('Rewriting content...') },
+                    { text: 'Explain', action: () => console.log('Explaining content...') },
+                    { 
+                      text: 'Back', 
+                      action: () => {
+                        // Clear current pills
+                        recommendationContainer.innerHTML = '';
+                        
+                        // Recreate the original pills
+                        recommendationPills.forEach(pill => {
+                          const pillButton = document.createElement('button');
+                          pillButton.className = 'ai-recommendation-pill';
+                          pillButton.textContent = pill.text;
+                          pillButton.onclick = pill.action;
+                          recommendationContainer.appendChild(pillButton);
+                        });
+                      } 
+                    }
+                  ];
+                  
+                  morePills.forEach(pill => {
+                    const pillButton = document.createElement('button');
+                    pillButton.className = 'ai-recommendation-pill';
+                    pillButton.textContent = pill.text;
+                    pillButton.onclick = pill.action;
+                    recommendationContainer.appendChild(pillButton);
+                  });
+                } 
+              }
+            ];
+            
+            recommendationPills.forEach(pill => {
+              const pillButton = document.createElement('button');
+              pillButton.className = 'ai-recommendation-pill';
+              pillButton.textContent = pill.text;
+              pillButton.onclick = pill.action;
+              recommendationContainer.appendChild(pillButton);
+            });
+            
             // Make a real API call to our OpenAI endpoint
             const generateAIResponse = async () => {
               try {
@@ -1013,18 +1195,18 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                 // First add the class to start fading out the loader
                 promptContainer.classList.add('loader-fading');
                 
-                // Wait for the loader to fade out completely
-                await new Promise(resolve => setTimeout(resolve, 300));
+                // Wait for the loader to fade out completely with a shorter delay
+                await new Promise(resolve => setTimeout(resolve, 250));
                 
                 // Now add the growing class to initiate container expansion
                 promptContainer.classList.add('growing');
                 
-                // Small delay before showing content
-                await new Promise(resolve => setTimeout(resolve, 200));
-                
                 // Display the response with word-by-word animation
                 const responseHtml = data.text || `<p>Error: Failed to generate a response.</p>`;
                 promptContent.innerHTML = renderTextWithAnimation(responseHtml);
+                
+                // Remove the initial recommendation pills
+                document.querySelector('.ai-recommendation-pills.initial')?.remove();
                 
                 // Add buttons container
                 const buttonsContainer = document.createElement('div');
@@ -1041,6 +1223,9 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                   
                   // Remove buttons
                   buttonsContainer.remove();
+                  
+                  // Remove recommendation pills
+                  document.querySelector('.ai-recommendation-pills')?.remove();
                   
                   // Get all the content from the AI response
                   const responseContent = promptContent.innerHTML;
@@ -1195,8 +1380,11 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                 // First add the class to start fading out the loader
                 promptContainer.classList.add('loader-fading');
                 
-                // Wait for the loader to fade out completely
-                await new Promise(resolve => setTimeout(resolve, 300));
+                // Wait for the loader to fade out completely with a shorter delay
+                await new Promise(resolve => setTimeout(resolve, 250));
+                
+                // Remove the initial recommendation pills
+                document.querySelector('.ai-recommendation-pills.initial')?.remove();
                 
                 // Now add the growing class to initiate container expansion
                 promptContainer.classList.add('growing');
@@ -1350,6 +1538,91 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                 </div>
               `;
               
+              // Add recommendation pills container immediately
+              const recommendationContainer = document.createElement('div');
+              recommendationContainer.className = 'ai-recommendation-pills initial';
+              document.querySelector('.text-editor-container')?.appendChild(recommendationContainer);
+              
+              // Add recommendation pills
+              const recommendationPills = [
+                { 
+                  text: 'Continue writing', 
+                  action: () => {
+                    const currentPrompt = promptText.trim();
+                    if (currentPrompt) {
+                      console.log('Continue writing with prompt:', currentPrompt);
+                    }
+                  } 
+                },
+                { 
+                  text: 'New section', 
+                  action: () => {
+                    const currentPrompt = promptText.trim();
+                    if (currentPrompt) {
+                      console.log('Create new section with prompt:', currentPrompt);
+                    }
+                  } 
+                },
+                { 
+                  text: 'View related content', 
+                  action: () => {
+                    const currentPrompt = promptText.trim();
+                    if (currentPrompt) {
+                      console.log('Find related content for:', currentPrompt);
+                    }
+                  } 
+                },
+                { 
+                  text: 'More', 
+                  action: () => {
+                    // Show more options
+                    debugLog('Showing more options');
+                    
+                    // Replace current pills with more options
+                    recommendationContainer.innerHTML = '';
+                    
+                    // Add additional options
+                    const morePills = [
+                      { text: 'Summarize', action: () => console.log('Summarizing content...') },
+                      { text: 'Rewrite', action: () => console.log('Rewriting content...') },
+                      { text: 'Explain', action: () => console.log('Explaining content...') },
+                      { 
+                        text: 'Back', 
+                        action: () => {
+                          // Clear current pills
+                          recommendationContainer.innerHTML = '';
+                          
+                          // Recreate the original pills
+                          recommendationPills.forEach(pill => {
+                            const pillButton = document.createElement('button');
+                            pillButton.className = 'ai-recommendation-pill';
+                            pillButton.textContent = pill.text;
+                            pillButton.onclick = pill.action;
+                            recommendationContainer.appendChild(pillButton);
+                          });
+                        } 
+                      }
+                    ];
+                    
+                    morePills.forEach(pill => {
+                      const pillButton = document.createElement('button');
+                      pillButton.className = 'ai-recommendation-pill';
+                      pillButton.textContent = pill.text;
+                      pillButton.onclick = pill.action;
+                      recommendationContainer.appendChild(pillButton);
+                    });
+                  } 
+                }
+              ];
+              
+              recommendationPills.forEach(pill => {
+                const pillButton = document.createElement('button');
+                pillButton.className = 'ai-recommendation-pill';
+                pillButton.textContent = pill.text;
+                pillButton.onclick = pill.action;
+                recommendationContainer.appendChild(pillButton);
+              });
+              
               // Make a real API call to our OpenAI endpoint
               const generateAIResponse = async () => {
                 try {
@@ -1372,18 +1645,18 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                   // First add the class to start fading out the loader
                   promptContainer.classList.add('loader-fading');
                   
-                  // Wait for the loader to fade out completely
-                  await new Promise(resolve => setTimeout(resolve, 300));
+                  // Wait for the loader to fade out completely with a shorter delay
+                  await new Promise(resolve => setTimeout(resolve, 250));
                   
                   // Now add the growing class to initiate container expansion
                   promptContainer.classList.add('growing');
                   
-                  // Small delay before showing content
-                  await new Promise(resolve => setTimeout(resolve, 200));
-                  
                   // Display the response with word-by-word animation
                   const responseHtml = data.text || `<p>Error: Failed to generate a response.</p>`;
                   promptContent.innerHTML = renderTextWithAnimation(responseHtml);
+                  
+                  // Remove the initial recommendation pills
+                  document.querySelector('.ai-recommendation-pills.initial')?.remove();
                   
                   // Add buttons container
                   const buttonsContainer = document.createElement('div');
@@ -1400,6 +1673,9 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                     
                     // Remove buttons
                     buttonsContainer.remove();
+                    
+                    // Remove recommendation pills
+                    document.querySelector('.ai-recommendation-pills')?.remove();
                     
                     // Get all the content from the AI response
                     const responseContent = promptContent.innerHTML;
@@ -1554,8 +1830,11 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                   // First add the class to start fading out the loader
                   promptContainer.classList.add('loader-fading');
                   
-                  // Wait for the loader to fade out completely
-                  await new Promise(resolve => setTimeout(resolve, 300));
+                  // Wait for the loader to fade out completely with a shorter delay
+                  await new Promise(resolve => setTimeout(resolve, 250));
+                  
+                  // Remove the initial recommendation pills
+                  document.querySelector('.ai-recommendation-pills.initial')?.remove();
                   
                   // Now add the growing class to initiate container expansion
                   promptContainer.classList.add('growing');
@@ -2087,22 +2366,20 @@ export const TextEditor: React.FC<TextEditorProps> = ({
             const span = document.createElement('span');
             span.textContent = word;
             span.className = 'ai-word-animation';
-            span.style.animationDelay = `${index * 30}ms`;
+            // Use a very slight delay between words for a smoother flowing effect
+            span.style.animationDelay = `${index * 5}ms`;
             fragment.appendChild(span);
           } else {
-            // This is whitespace, preserve it as is
+            // This is whitespace, preserve it
             fragment.appendChild(document.createTextNode(word));
           }
         });
         
-        if (node.parentNode) {
-          node.parentNode.replaceChild(fragment, node);
-        }
+        // Replace the original text node with our animated fragment
+        node.parentNode?.replaceChild(fragment, node);
       } else if (node.nodeType === Node.ELEMENT_NODE) {
-        // Process child elements
-        Array.from(node.childNodes).forEach(child => {
-          processTextNodes(child);
-        });
+        // Recursively process child nodes
+        Array.from(node.childNodes).forEach(processTextNodes);
       }
     };
     
@@ -2191,10 +2468,27 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         .ai-prompt-container.loader-fading .ai-loading-bubble,
         .ai-prompt-container.loader-fading .ai-loading-dot {
           opacity: 0;
+          transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Animation configuration that creates a smoother width/height transition */
+        @keyframes container-grow {
+          0% {
+            max-height: 30px;
+            width: 180px;
+            max-width: 180px;
+            opacity: 0.9;
+          }
+          100% {
+            max-height: 1000px;
+            width: 100%;
+            max-width: 100%;
+            opacity: 1;
+          }
         }
         
         .ai-prompt-container.growing {
-          animation: container-grow 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+          animation: container-grow 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
           width: auto;
           min-width: 100px;
         }
@@ -2217,13 +2511,13 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         
         .ai-animated-text {
           opacity: 0;
-          animation: fade-in 0.5s ease-out 0.2s forwards;
-          transition: opacity 0.5s ease-out;
+          animation: fade-in 0.4s ease-out 0.2s forwards;
+          transition: opacity 0.4s ease-out;
         }
         
         .ai-word-animation {
           opacity: 0;
-          animation: word-appear 0.4s ease-out forwards;
+          animation: word-appear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
           display: inline-block;
           transform-origin: bottom left;
         }
@@ -2234,15 +2528,15 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         .ai-prompt-content span,
         .ai-prompt-content strong {
           opacity: 0;
-          animation: fade-in 0.5s ease-out forwards;
+          animation: fade-in 0.5s ease-out 0.3s forwards;
         }
         
-        /* Apply sequential fade-in to paragraphs */
+        /* Apply more subtle sequential timing for paragraphs */
         .ai-prompt-content p:nth-child(1) { animation-delay: 0.3s; }
-        .ai-prompt-content p:nth-child(2) { animation-delay: 0.5s; }
-        .ai-prompt-content p:nth-child(3) { animation-delay: 0.7s; }
-        .ai-prompt-content p:nth-child(4) { animation-delay: 0.9s; }
-        .ai-prompt-content p:nth-child(n+5) { animation-delay: 1.1s; }
+        .ai-prompt-content p:nth-child(2) { animation-delay: 0.35s; }
+        .ai-prompt-content p:nth-child(3) { animation-delay: 0.4s; }
+        .ai-prompt-content p:nth-child(4) { animation-delay: 0.45s; }
+        .ai-prompt-content p:nth-child(n+5) { animation-delay: 0.5s; }
         
         @keyframes fade-in {
           from { opacity: 0; }
@@ -2252,42 +2546,11 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         @keyframes word-appear {
           from { 
             opacity: 0;
-            transform: translateY(8px);
+            transform: translateY(5px);
           }
           to { 
             opacity: 1;
             transform: translateY(0);
-          }
-        }
-        
-        /* Animation configuration that creates a smoother width/height transition */
-        @keyframes container-grow {
-          0% {
-            max-height: 30px;
-            width: 180px;
-            max-width: 180px;
-            opacity: 0.9;
-          }
-          10% {
-            max-height: 55px;
-            width: 200px;
-            max-width: 200px;
-          }
-          30% {
-            max-height: 150px;
-            width: 400px;
-            max-width: 400px;
-          }
-          60% {
-            max-height: 300px;
-            width: 70%;
-            max-width: 70%;
-          }
-          100% {
-            max-height: 1000px;
-            width: 100%;
-            max-width: 100%;
-            opacity: 1;
           }
         }
         
@@ -2338,7 +2601,67 @@ export const TextEditor: React.FC<TextEditorProps> = ({
           position: absolute !important;
           pointer-events: none !important;
           opacity: 0.75 !important;
-          
+          font-style: italic !important;
+        }
+        
+        /* Animation for error message */
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-5px); }
+          75% { transform: translateX(5px); }
+        }
+
+        /* Recommendation Pills Styles */
+        .ai-recommendation-pills {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin: 8px auto 0;
+          padding: 8px 12px 12px;
+          opacity: 0;
+          animation: fade-in 0.4s ease-out 0.5s forwards;
+          position: relative;
+          border-top: 1px solid rgba(203, 213, 225, 0.3);
+          justify-content: center;
+          max-width: 600px;
+          background-color: #f9fafc;
+          border-radius: 8px;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+        
+        /* Special styling for pills shown during initial prompt */
+        .ai-recommendation-pills.initial {
+          animation: fade-in 0.2s ease-out forwards;
+          margin-top: 4px;
+          position: absolute;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 10;
+          width: fit-content;
+          min-width: 350px;
+          background-color: white;
+          border: 1px solid rgba(203, 213, 225, 0.5);
+        }
+        
+        .ai-recommendation-pill {
+          padding: 6px 12px;
+          border-radius: 100px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          border: none;
+          background-color: rgba(237, 242, 247, 0.9);
+          color: #3B82F6;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+          border: 1px solid rgba(203, 213, 225, 0.5);
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+        
+        .ai-recommendation-pill:hover {
+          background-color: rgba(59, 130, 246, 0.1);
+          transform: translateY(-1px);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.07);
         }
       `;
       document.head.appendChild(style);
