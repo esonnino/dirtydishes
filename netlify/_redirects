@@ -1,0 +1,2 @@
+# Redirect all function calls to the main app
+/api/*  /.netlify/functions/:splat  200 
