@@ -98,93 +98,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         // Update line DOM
         line.setAttribute('data-ai-prompt', 'true');
         line.className = newState === 'typing' ? 'ai-prompt-line typing' : 'ai-prompt-line';
-        
-        // Add recommendation pills immediately when entering AI mode
-        if (newState === 'active') {
-          // Clean up any existing recommendation pills first
-          document.querySelector('.ai-recommendation-pills.initial')?.remove();
-          
-          // Add recommendation pills container
-          const recommendationContainer = document.createElement('div');
-          recommendationContainer.className = 'ai-recommendation-pills initial';
-          document.querySelector('.text-editor-container')?.appendChild(recommendationContainer);
-          
-          // Add recommendation pills
-          const recommendationPills = [
-            { 
-              text: 'Continue writing', 
-              action: () => {
-                const promptText = line.textContent?.trim() || '';
-                console.log('Continue writing with prompt:', promptText);
-              } 
-            },
-            { 
-              text: 'New section', 
-              action: () => {
-                const promptText = line.textContent?.trim() || '';
-                console.log('Create new section with prompt:', promptText);
-              } 
-            },
-            { 
-              text: 'View related content', 
-              action: () => {
-                const promptText = line.textContent?.trim() || '';
-                console.log('Find related content for:', promptText);
-              } 
-            },
-            { 
-              text: 'More', 
-              action: () => {
-                // Show more options
-                debugLog('Showing more options');
-                
-                // Replace current pills with more options
-                recommendationContainer.innerHTML = '';
-                
-                // Add additional options
-                const morePills = [
-                  { text: 'Summarize', action: () => console.log('Summarizing content...') },
-                  { text: 'Rewrite', action: () => console.log('Rewriting content...') },
-                  { text: 'Explain', action: () => console.log('Explaining content...') },
-                  { 
-                    text: 'Back', 
-                    action: () => {
-                      // Clear current pills
-                      recommendationContainer.innerHTML = '';
-                      
-                      // Recreate the original pills
-                      recommendationPills.forEach(pill => {
-                        const pillButton = document.createElement('button');
-                        pillButton.className = 'ai-recommendation-pill';
-                        pillButton.textContent = pill.text;
-                        pillButton.onclick = pill.action;
-                        recommendationContainer.appendChild(pillButton);
-                      });
-                    } 
-                  }
-                ];
-                
-                morePills.forEach(pill => {
-                  const pillButton = document.createElement('button');
-                  pillButton.className = 'ai-recommendation-pill';
-                  pillButton.textContent = pill.text;
-                  pillButton.onclick = pill.action;
-                  recommendationContainer.appendChild(pillButton);
-                });
-              } 
-            }
-          ];
-          
-          recommendationPills.forEach(pill => {
-            const pillButton = document.createElement('button');
-            pillButton.className = 'ai-recommendation-pill';
-            pillButton.textContent = pill.text;
-            pillButton.onclick = pill.action;
-            recommendationContainer.appendChild(pillButton);
-          });
-        }
-        
-        // Update line DOM
         line.setAttribute('data-placeholder', 'Write with AI or select from below');
         
         // Calculate and update the button position to match the active line
@@ -202,15 +115,8 @@ export const TextEditor: React.FC<TextEditorProps> = ({
       if (aiModeLine) {
         aiModeLine.removeAttribute('data-ai-prompt');
         aiModeLine.className = '';
-        
-        // Remove any recommendation pills that might be visible
-        document.querySelector('.ai-recommendation-pills.initial')?.remove();
-        
-        // Restore the original placeholder
         aiModeLine.setAttribute('data-placeholder', placeholder);
       }
-      
-      // Reset state
       setAiModeLine(null);
     }
     
@@ -1015,9 +921,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         e.preventDefault();
         e.stopPropagation();
         
-        // If there are initial recommendation pills, hide them as we're now going to process the prompt
-        document.querySelector('.ai-recommendation-pills.initial')?.remove();
-        
         // If we have active AI line, use it directly instead of searching
         if (aiModeLine) {
           const promptText = aiModeLine.textContent || '';
@@ -1088,91 +991,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
               </div>
             `;
             
-            // Add recommendation pills container immediately
-            const recommendationContainer = document.createElement('div');
-            recommendationContainer.className = 'ai-recommendation-pills initial';
-            document.querySelector('.text-editor-container')?.appendChild(recommendationContainer);
-            
-            // Add recommendation pills
-            const recommendationPills = [
-              { 
-                text: 'Continue writing', 
-                action: () => {
-                  const currentPrompt = promptText.trim();
-                  if (currentPrompt) {
-                    console.log('Continue writing with prompt:', currentPrompt);
-                  }
-                } 
-              },
-              { 
-                text: 'New section', 
-                action: () => {
-                  const currentPrompt = promptText.trim();
-                  if (currentPrompt) {
-                    console.log('Create new section with prompt:', currentPrompt);
-                  }
-                } 
-              },
-              { 
-                text: 'View related content', 
-                action: () => {
-                  const currentPrompt = promptText.trim();
-                  if (currentPrompt) {
-                    console.log('Find related content for:', currentPrompt);
-                  }
-                } 
-              },
-              { 
-                text: 'More', 
-                action: () => {
-                  // Show more options
-                  debugLog('Showing more options');
-                  
-                  // Replace current pills with more options
-                  recommendationContainer.innerHTML = '';
-                  
-                  // Add additional options
-                  const morePills = [
-                    { text: 'Summarize', action: () => console.log('Summarizing content...') },
-                    { text: 'Rewrite', action: () => console.log('Rewriting content...') },
-                    { text: 'Explain', action: () => console.log('Explaining content...') },
-                    { 
-                      text: 'Back', 
-                      action: () => {
-                        // Clear current pills
-                        recommendationContainer.innerHTML = '';
-                        
-                        // Recreate the original pills
-                        recommendationPills.forEach(pill => {
-                          const pillButton = document.createElement('button');
-                          pillButton.className = 'ai-recommendation-pill';
-                          pillButton.textContent = pill.text;
-                          pillButton.onclick = pill.action;
-                          recommendationContainer.appendChild(pillButton);
-                        });
-                      } 
-                    }
-                  ];
-                  
-                  morePills.forEach(pill => {
-                    const pillButton = document.createElement('button');
-                    pillButton.className = 'ai-recommendation-pill';
-                    pillButton.textContent = pill.text;
-                    pillButton.onclick = pill.action;
-                    recommendationContainer.appendChild(pillButton);
-                  });
-                } 
-              }
-            ];
-            
-            recommendationPills.forEach(pill => {
-              const pillButton = document.createElement('button');
-              pillButton.className = 'ai-recommendation-pill';
-              pillButton.textContent = pill.text;
-              pillButton.onclick = pill.action;
-              recommendationContainer.appendChild(pillButton);
-            });
-            
             // Make a real API call to our OpenAI endpoint
             const generateAIResponse = async () => {
               try {
@@ -1205,13 +1023,112 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                 const responseHtml = data.text || `<p>Error: Failed to generate a response.</p>`;
                 promptContent.innerHTML = renderTextWithAnimation(responseHtml);
                 
-                // Remove the initial recommendation pills
-                document.querySelector('.ai-recommendation-pills.initial')?.remove();
-                
                 // Add buttons container
                 const buttonsContainer = document.createElement('div');
                 buttonsContainer.className = 'ai-response-buttons';
                 promptContent.appendChild(buttonsContainer);
+                
+                // Add recommendation pills container
+                const recommendationContainer = document.createElement('div');
+                recommendationContainer.className = 'ai-recommendation-pills';
+                document.querySelector('.text-editor-container')?.appendChild(recommendationContainer);
+                
+                // Add recommendation pills
+                const recommendationPills = [
+                  { 
+                    text: 'Continue writing', 
+                    action: () => {
+                      // Get the current AI response content and send a follow-up prompt
+                      const currentResponse = promptContent.textContent || '';
+                      const followUpPrompt = `Continue writing from: ${currentResponse.slice(-100)}`;
+                      debugLog('Continue writing:', followUpPrompt);
+                      
+                      // Remove the recommendation pills
+                      recommendationContainer.remove();
+                      
+                      // Here you would typically send the followUpPrompt to generate more content
+                      // For demo purposes, we'll just log it
+                      console.log('Continue writing with prompt:', followUpPrompt);
+                    } 
+                  },
+                  { 
+                    text: 'New section', 
+                    action: () => {
+                      // Create a new section based on current content
+                      const currentResponse = promptContent.textContent || '';
+                      debugLog('Creating new section based on:', currentResponse);
+                      
+                      // Remove the recommendation pills
+                      recommendationContainer.remove();
+                      
+                      // For demo purposes, we'll just log it
+                      console.log('Creating new section based on current content');
+                    } 
+                  },
+                  { 
+                    text: 'View related content', 
+                    action: () => {
+                      // Find related content based on current response
+                      const currentResponse = promptContent.textContent || '';
+                      debugLog('Finding related content for:', currentResponse);
+                      
+                      // Remove the recommendation pills
+                      recommendationContainer.remove();
+                      
+                      // For demo purposes, we'll just log it
+                      console.log('Finding related content...');
+                    } 
+                  },
+                  { 
+                    text: 'More', 
+                    action: () => {
+                      // Show more options
+                      debugLog('Showing more options');
+                      
+                      // Replace current pills with more options
+                      recommendationContainer.innerHTML = '';
+                      
+                      // Add additional options
+                      const morePills = [
+                        { text: 'Summarize', action: () => console.log('Summarizing content...') },
+                        { text: 'Rewrite', action: () => console.log('Rewriting content...') },
+                        { text: 'Explain', action: () => console.log('Explaining content...') },
+                        { 
+                          text: 'Back', 
+                          action: () => {
+                            // Clear current pills
+                            recommendationContainer.innerHTML = '';
+                            
+                            // Recreate the original pills
+                            recommendationPills.forEach(pill => {
+                              const pillButton = document.createElement('button');
+                              pillButton.className = 'ai-recommendation-pill';
+                              pillButton.textContent = pill.text;
+                              pillButton.onclick = pill.action;
+                              recommendationContainer.appendChild(pillButton);
+                            });
+                          } 
+                        }
+                      ];
+                      
+                      morePills.forEach(pill => {
+                        const pillButton = document.createElement('button');
+                        pillButton.className = 'ai-recommendation-pill';
+                        pillButton.textContent = pill.text;
+                        pillButton.onclick = pill.action;
+                        recommendationContainer.appendChild(pillButton);
+                      });
+                    } 
+                  }
+                ];
+                
+                recommendationPills.forEach(pill => {
+                  const pillButton = document.createElement('button');
+                  pillButton.className = 'ai-recommendation-pill';
+                  pillButton.textContent = pill.text;
+                  pillButton.onclick = pill.action;
+                  recommendationContainer.appendChild(pillButton);
+                });
                 
                 // Add Accept button
                 const acceptButton = document.createElement('button');
@@ -1383,9 +1300,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                 // Wait for the loader to fade out completely with a shorter delay
                 await new Promise(resolve => setTimeout(resolve, 250));
                 
-                // Remove the initial recommendation pills
-                document.querySelector('.ai-recommendation-pills.initial')?.remove();
-                
                 // Now add the growing class to initiate container expansion
                 promptContainer.classList.add('growing');
                 
@@ -1538,91 +1452,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                 </div>
               `;
               
-              // Add recommendation pills container immediately
-              const recommendationContainer = document.createElement('div');
-              recommendationContainer.className = 'ai-recommendation-pills initial';
-              document.querySelector('.text-editor-container')?.appendChild(recommendationContainer);
-              
-              // Add recommendation pills
-              const recommendationPills = [
-                { 
-                  text: 'Continue writing', 
-                  action: () => {
-                    const currentPrompt = promptText.trim();
-                    if (currentPrompt) {
-                      console.log('Continue writing with prompt:', currentPrompt);
-                    }
-                  } 
-                },
-                { 
-                  text: 'New section', 
-                  action: () => {
-                    const currentPrompt = promptText.trim();
-                    if (currentPrompt) {
-                      console.log('Create new section with prompt:', currentPrompt);
-                    }
-                  } 
-                },
-                { 
-                  text: 'View related content', 
-                  action: () => {
-                    const currentPrompt = promptText.trim();
-                    if (currentPrompt) {
-                      console.log('Find related content for:', currentPrompt);
-                    }
-                  } 
-                },
-                { 
-                  text: 'More', 
-                  action: () => {
-                    // Show more options
-                    debugLog('Showing more options');
-                    
-                    // Replace current pills with more options
-                    recommendationContainer.innerHTML = '';
-                    
-                    // Add additional options
-                    const morePills = [
-                      { text: 'Summarize', action: () => console.log('Summarizing content...') },
-                      { text: 'Rewrite', action: () => console.log('Rewriting content...') },
-                      { text: 'Explain', action: () => console.log('Explaining content...') },
-                      { 
-                        text: 'Back', 
-                        action: () => {
-                          // Clear current pills
-                          recommendationContainer.innerHTML = '';
-                          
-                          // Recreate the original pills
-                          recommendationPills.forEach(pill => {
-                            const pillButton = document.createElement('button');
-                            pillButton.className = 'ai-recommendation-pill';
-                            pillButton.textContent = pill.text;
-                            pillButton.onclick = pill.action;
-                            recommendationContainer.appendChild(pillButton);
-                          });
-                        } 
-                      }
-                    ];
-                    
-                    morePills.forEach(pill => {
-                      const pillButton = document.createElement('button');
-                      pillButton.className = 'ai-recommendation-pill';
-                      pillButton.textContent = pill.text;
-                      pillButton.onclick = pill.action;
-                      recommendationContainer.appendChild(pillButton);
-                    });
-                  } 
-                }
-              ];
-              
-              recommendationPills.forEach(pill => {
-                const pillButton = document.createElement('button');
-                pillButton.className = 'ai-recommendation-pill';
-                pillButton.textContent = pill.text;
-                pillButton.onclick = pill.action;
-                recommendationContainer.appendChild(pillButton);
-              });
-              
               // Make a real API call to our OpenAI endpoint
               const generateAIResponse = async () => {
                 try {
@@ -1655,13 +1484,112 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                   const responseHtml = data.text || `<p>Error: Failed to generate a response.</p>`;
                   promptContent.innerHTML = renderTextWithAnimation(responseHtml);
                   
-                  // Remove the initial recommendation pills
-                  document.querySelector('.ai-recommendation-pills.initial')?.remove();
-                  
                   // Add buttons container
                   const buttonsContainer = document.createElement('div');
                   buttonsContainer.className = 'ai-response-buttons';
                   promptContent.appendChild(buttonsContainer);
+                  
+                  // Add recommendation pills container
+                  const recommendationContainer = document.createElement('div');
+                  recommendationContainer.className = 'ai-recommendation-pills';
+                  document.querySelector('.text-editor-container')?.appendChild(recommendationContainer);
+                  
+                  // Add recommendation pills
+                  const recommendationPills = [
+                    { 
+                      text: 'Continue writing', 
+                      action: () => {
+                        // Get the current AI response content and send a follow-up prompt
+                        const currentResponse = promptContent.textContent || '';
+                        const followUpPrompt = `Continue writing from: ${currentResponse.slice(-100)}`;
+                        debugLog('Continue writing:', followUpPrompt);
+                        
+                        // Remove the recommendation pills
+                        recommendationContainer.remove();
+                        
+                        // Here you would typically send the followUpPrompt to generate more content
+                        // For demo purposes, we'll just log it
+                        console.log('Continue writing with prompt:', followUpPrompt);
+                      } 
+                    },
+                    { 
+                      text: 'New section', 
+                      action: () => {
+                        // Create a new section based on current content
+                        const currentResponse = promptContent.textContent || '';
+                        debugLog('Creating new section based on:', currentResponse);
+                        
+                        // Remove the recommendation pills
+                        recommendationContainer.remove();
+                        
+                        // For demo purposes, we'll just log it
+                        console.log('Creating new section based on current content');
+                      } 
+                    },
+                    { 
+                      text: 'View related content', 
+                      action: () => {
+                        // Find related content based on current response
+                        const currentResponse = promptContent.textContent || '';
+                        debugLog('Finding related content for:', currentResponse);
+                        
+                        // Remove the recommendation pills
+                        recommendationContainer.remove();
+                        
+                        // For demo purposes, we'll just log it
+                        console.log('Finding related content...');
+                      } 
+                    },
+                    { 
+                      text: 'More', 
+                      action: () => {
+                        // Show more options
+                        debugLog('Showing more options');
+                        
+                        // Replace current pills with more options
+                        recommendationContainer.innerHTML = '';
+                        
+                        // Add additional options
+                        const morePills = [
+                          { text: 'Summarize', action: () => console.log('Summarizing content...') },
+                          { text: 'Rewrite', action: () => console.log('Rewriting content...') },
+                          { text: 'Explain', action: () => console.log('Explaining content...') },
+                          { 
+                            text: 'Back', 
+                            action: () => {
+                              // Clear current pills
+                              recommendationContainer.innerHTML = '';
+                              
+                              // Recreate the original pills
+                              recommendationPills.forEach(pill => {
+                                const pillButton = document.createElement('button');
+                                pillButton.className = 'ai-recommendation-pill';
+                                pillButton.textContent = pill.text;
+                                pillButton.onclick = pill.action;
+                                recommendationContainer.appendChild(pillButton);
+                              });
+                            } 
+                          }
+                        ];
+                        
+                        morePills.forEach(pill => {
+                          const pillButton = document.createElement('button');
+                          pillButton.className = 'ai-recommendation-pill';
+                          pillButton.textContent = pill.text;
+                          pillButton.onclick = pill.action;
+                          recommendationContainer.appendChild(pillButton);
+                        });
+                      } 
+                    }
+                  ];
+                  
+                  recommendationPills.forEach(pill => {
+                    const pillButton = document.createElement('button');
+                    pillButton.className = 'ai-recommendation-pill';
+                    pillButton.textContent = pill.text;
+                    pillButton.onclick = pill.action;
+                    recommendationContainer.appendChild(pillButton);
+                  });
                   
                   // Add Accept button
                   const acceptButton = document.createElement('button');
@@ -1832,9 +1760,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                   
                   // Wait for the loader to fade out completely with a shorter delay
                   await new Promise(resolve => setTimeout(resolve, 250));
-                  
-                  // Remove the initial recommendation pills
-                  document.querySelector('.ai-recommendation-pills.initial')?.remove();
                   
                   // Now add the growing class to initiate container expansion
                   promptContainer.classList.add('growing');
@@ -2627,20 +2552,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
           background-color: #f9fafc;
           border-radius: 8px;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-        }
-        
-        /* Special styling for pills shown during initial prompt */
-        .ai-recommendation-pills.initial {
-          animation: fade-in 0.2s ease-out forwards;
-          margin-top: 4px;
-          position: absolute;
-          left: 50%;
-          transform: translateX(-50%);
-          z-index: 10;
-          width: fit-content;
-          min-width: 350px;
-          background-color: white;
-          border: 1px solid rgba(203, 213, 225, 0.5);
         }
         
         .ai-recommendation-pill {
