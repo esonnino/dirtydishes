@@ -1,23 +1,20 @@
 [build]
   command = "./build.sh"
   publish = ".next"
-  ignore = "if [[ $COMMIT_MESSAGE == *skip-netlify* ]]; then exit 0; else exit 1; fi"
 
 [build.environment]
   NODE_VERSION = "18.17.0"
   NEXT_TELEMETRY_DISABLED = "1"
-  GO_VERSION = "false"
   GO_SKIP_INSTALL = "true"
   GIT_LFS_SKIP_SMUDGE = "1"
 
-# Run before the build to override Go installation
+# Run hooks before build stages
 [build.lifecycle]
-  onInit = "source ./netlify/setup-override.sh"
+  onPreBuild = "source ./netlify/build-hooks/pre-build.sh"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
 [functions]
-  # Explicitly empty functions directory to prevent Go installation
   directory = "netlify/functions"
   node_bundler = "esbuild" 
